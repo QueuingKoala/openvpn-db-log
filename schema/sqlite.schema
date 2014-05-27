@@ -1,0 +1,12 @@
+CREATE TABLE session (
+	id integer primary key autoincrement,
+	connect_time bigint,
+	src_ip varchar(39),
+	src_port unsigned smallint,
+	vpn_ip4 varchar(15),
+	cn varchar(64),
+	disconnect_time bigint,
+	duration integer,
+	bytes_in unsigned bigint,
+	bytes_out unsigned bigint
+);
