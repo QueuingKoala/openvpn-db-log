@@ -71,9 +71,6 @@ for my $key (keys %o) {
 $type =~ /^client-disconnect$/
 	and $o{disconnect_time} = $o{time} + $o{duration};
 
-# Escape single-quotes in the cn as they're SQL string quotes:
-$o{cn} =~ s/'/''/g;
-
 # Connect to the SQL DB
 my $dbh;
 $dbh = DBI->connect(
@@ -89,6 +86,10 @@ $dbh = DBI->connect(
 if ($@) {
 	die "DB connection failed: ($DBI::errstr)";
 }
+
+# In certain OpenVPN modes the common_name may have special chars.
+# Quote it according to the database needs
+$o{cn} = $dbh->quote($o{cn});
 
 # Take the right DB update action depending on script type.
 # Any database errors escape the eval to be handled below.
@@ -117,7 +118,7 @@ sub connect {
 			'$o{src_ip}',
 			'$o{src_port}',
 			'$o{vpn_ip4}',
-			'$o{cn}'
+			$o{cn}
 		)
 
 	});
@@ -135,7 +136,7 @@ sub disconnect {
 			disconnect_time is null
 		  AND	connect_time = '$o{time}'
 		  AND	vpn_ip4 = '$o{vpn_ip4}'
-		  AND	cn = '$o{cn}'
+		  AND	cn = $o{cn}
 		ORDER BY
 			id DESC
 		LIMIT	1
