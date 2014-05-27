@@ -16,9 +16,11 @@ my ($host, $port) = ('', '');
 my $user = undef;
 my $pass = undef;
 my $backend = "SQLite";
-my $rc_log_fail	= 0;
+my $rc_fail = 0;
+my $silent = '';
 GetOptions(
-	"fatal-failure|F!"	=> \$rc_log_fail,
+	"fatal-failure|F!"	=> \$rc_fail,
+	"quiet|q!"		=> \$silent,
 	"backend|b=s"		=> \$backend,
 	"database|db|d=s"	=> \$db,
 	"host|h=s"		=> \$host,
@@ -27,7 +29,7 @@ GetOptions(
 );
 
 defined $db or
-	die "Options error: No database specified";
+	failure("Options error: No database specified");
 
 # Define env-vars to check, and shorter reference option names.
 # Disconnect will add to this hash later if needed
@@ -41,7 +43,7 @@ my %o = (
 
 # Set var requirements and sub handler depending on script_type
 my $type = $ENV{script_type}
-	or die "ERR: script_type is unset";
+	or failure("ERR: script_type is unset");
 my $handler = \&connect;
 if ( $type =~ /^client-disconnect$/ ) {
 	$handler = \&disconnect;
@@ -54,7 +56,7 @@ if ( $type =~ /^client-disconnect$/ ) {
 	);
 }
 elsif ( $type !~ /^client-connect$/ ) {
-	die "Invalid script_type: '$type'";
+	failure("Invalid script_type: '$type'");
 }
 
 # Verify and set env-var values
@@ -63,7 +65,7 @@ my $var;
 for my $key (keys %o) {
 	$var = $o{$key};
 	defined $ENV{$var}
-		or die "ERR: missing env-var: $var";
+		or failure("ERR: missing env-var: $var");
 	$o{$key} = $ENV{$var};
 }
 
@@ -78,14 +80,13 @@ $dbh = DBI->connect(
 	$user,
 	$pass, {
 		AutoCommit	=> 0,
-		RaiseError	=> 1,
 		PrintError	=> 0,
 	}
 );
 # Handle DB connect errors
-if ($@) {
-	die "DB connection failed: ($DBI::errstr)";
-}
+defined $dbh
+	or failure("DB connection failed: ($DBI::errstr)");
+$dbh->{RaiseError} = 1;
 
 # In certain OpenVPN modes the common_name may have special chars.
 # Quote it according to the database needs
@@ -97,10 +98,17 @@ eval $handler->();
 
 # Handle any DB transaction errors from the handler sub
 if ($@) {
-	warn "SQL transaction failed: $@";
+	my $msg = "$@";
 	eval { $dbh->rollback; };
-	exit $rc_log_fail;
+	failure($msg);
 }
+
+# Exit handler, for message display and return code control
+sub failure {
+	my ($msg) = @_;
+	warn "$msg" if $msg and not $silent;
+	exit $rc_fail;
+};
 
 # Insert the connect data
 sub connect {
@@ -143,7 +151,7 @@ sub disconnect {
 	});
 	$sth->execute;
 	my $id = $sth->fetchrow_array
-		or die "No matching connection entry found";
+		or failure("No matching connection entry found");
 
 	# Update session details with disconnect values:
 	$sth = $dbh->prepare(qq{
