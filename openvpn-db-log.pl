@@ -94,7 +94,9 @@ $o{cn} = $dbh->quote($o{cn});
 
 # Take the right DB update action depending on script type.
 # Any database errors escape the eval to be handled below.
-eval $handler->();
+eval {
+	$handler->();
+};
 
 # Handle any DB transaction errors from the handler sub
 if ($@) {
@@ -151,7 +153,7 @@ sub disconnect {
 	});
 	$sth->execute;
 	my $id = $sth->fetchrow_array
-		or failure("No matching connection entry found");
+		or die "No matching connection entry found";
 
 	# Update session details with disconnect values:
 	$sth = $dbh->prepare(qq{
