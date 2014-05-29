@@ -18,6 +18,11 @@ my $pass = undef;
 my $backend = "SQLite";
 my $rc_fail = 0;
 my $silent = '';
+my %i = (
+	name	=> '',
+	proto	=> '',
+	port	=> 0,
+);
 GetOptions(
 	"fatal-failure|F!"	=> \$rc_fail,
 	"quiet|q!"		=> \$silent,
@@ -26,10 +31,20 @@ GetOptions(
 	"host|h=s"		=> \$host,
 	"user|u=s"		=> \$user,
 	"password|pass|p=s"	=> \$pass,
+	"instance-name|n=s"	=> \$i{name},
+	"instance-proto|r=s"	=> \$i{proto},
+	"instance-port|o=i"	=> \$i{port},
 );
 
+# Verify CLI opts
 defined $db or
 	failure("Options error: No database specified");
+length($i{name}) <= 64
+	or failure("Options error: instance-name too long (>64)");
+length($i{proto}) <= 10
+	or failure("Options error: instance-proto too long (>10)");
+$i{port} >= 0 and $i{port} <= 65535
+	or failure("Options error: instance-port out of range (1-65535)");
 
 # Define env-vars to check, and shorter reference option names.
 # Disconnect will add to this hash later if needed
@@ -88,9 +103,10 @@ defined $dbh
 	or failure("DB connection failed: ($DBI::errstr)");
 $dbh->{RaiseError} = 1;
 
-# In certain OpenVPN modes the common_name may have special chars.
-# Quote it according to the database needs
+# Quote strings that may contain special chars:
 $o{cn} = $dbh->quote($o{cn});
+$i{name} = $dbh->quote($i{name});
+$i{proto} = $dbh->quote($i{proto});
 
 # Take the right DB update action depending on script type.
 # Any database errors escape the eval to be handled below.
@@ -114,6 +130,8 @@ sub failure {
 
 # Insert the connect data
 sub connect {
+	my $iid = get_instance();
+	defined $iid or die "Failed to obtain instance";
 	$dbh->do(qq{
 		INSERT INTO
 		session (
@@ -121,14 +139,16 @@ sub connect {
 			src_ip,
 			src_port,
 			vpn_ip4,
-			cn
+			cn,
+			instance_id
 		)
 		VALUES (
 			'$o{time}',
 			'$o{src_ip}',
 			'$o{src_port}',
 			'$o{vpn_ip4}',
-			$o{cn}
+			$o{cn},
+			'$iid'
 		)
 
 	});
@@ -138,6 +158,8 @@ sub connect {
 # Insert the disconnect data
 sub disconnect {
 	my $sth;
+	my $iid = get_instance('');
+	defined $iid or die "Failed to obtain instance";
 	# Associate with the connect session using env-vars:
 	$sth = $dbh->prepare(qq{
 		SELECT	id
@@ -147,6 +169,7 @@ sub disconnect {
 		  AND	connect_time = '$o{time}'
 		  AND	vpn_ip4 = '$o{vpn_ip4}'
 		  AND	cn = $o{cn}
+		  AND	instance_id = '$iid'
 		ORDER BY
 			id DESC
 		LIMIT	1
@@ -169,5 +192,45 @@ sub disconnect {
 	});
 	$sth->execute;
 	$dbh->commit;
+}
+
+sub get_instance {
+	my ($init) = @_;
+	defined $init or $init = 1;
+	my $sth = $dbh->prepare(qq{
+		SELECT	id
+		FROM	instance
+		WHERE
+			name = $i{name}
+		  AND	port = $i{port}
+		  AND	protocol = $i{proto}
+		ORDER BY
+			id ASC
+		LIMIT	1
+	});
+	$sth->execute;
+	my $id = $sth->fetchrow_array;
+	# Try to add instance details if none present
+	if (! defined $id and $init) {
+		$id = add_instance();
+	}
+	return $id if defined $id;
+	die "Failed instance association";
+}
+
+sub add_instance {
+	$dbh->do(qq{
+		INSERT OR FAIL INTO instance (
+			name,
+			port,
+			protocol
+		)
+		values (
+			$i{name},
+			$i{port},
+			$i{proto}
+		)
+	});
+	return get_instance('');
 }
 
