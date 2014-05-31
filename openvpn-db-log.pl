@@ -84,10 +84,6 @@ for my $key (keys %o) {
 	$o{$key} = $ENV{$var};
 }
 
-# On disconnect, the event time must be calculaed
-$type =~ /^client-disconnect$/
-	and $o{disconnect_time} = $o{time} + $o{duration};
-
 # Connect to the SQL DB
 my $dbh;
 $dbh = DBI->connect(
@@ -179,6 +175,7 @@ sub disconnect {
 		or die "No matching connection entry found";
 
 	# Update session details with disconnect values:
+	$o{disconnect_time} = $o{time} + $o{duration};
 	$sth = $dbh->prepare(qq{
 		UPDATE OR FAIL
 			session
