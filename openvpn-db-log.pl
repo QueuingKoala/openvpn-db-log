@@ -47,7 +47,7 @@ $i{port} >= 0 and $i{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
 
 # Define env-vars to check, and shorter reference option names.
-# Disconnect will add to this hash later if needed
+# Disconnect/update will add to this hash later if needed
 my %o = (
 	time		=> 'time_unix',
 	src_port	=> 'trusted_port',
@@ -65,6 +65,15 @@ if ( $type =~ /^client-disconnect$/ ) {
 	%o = (
 		%o,
 		duration	=> 'time_duration',
+		bytes_in	=> 'bytes_received',
+		bytes_out	=> 'bytes_sent',
+	);
+}
+elsif ( $type =~ /^client-update$/) {
+	$handler = \&update;
+	# vars required for updates:
+	%o = (
+		%o,
 		bytes_in	=> 'bytes_received',
 		bytes_out	=> 'bytes_sent',
 	);
@@ -134,7 +143,6 @@ sub failure {
 # Insert the connect data
 sub connect {
 	my $iid = get_instance();
-	defined $iid or die "Failed to obtain instance";
 	$dbh->do(qq{
 		INSERT INTO
 		session (
@@ -162,24 +170,7 @@ sub connect {
 sub disconnect {
 	my $sth;
 	my $iid = get_instance('');
-	defined $iid or die "Failed to obtain instance";
-	# Associate with the connect session using env-vars:
-	$sth = $dbh->prepare(qq{
-		SELECT	id
-		FROM	session
-		WHERE
-			disconnect_time is null
-		  AND	connect_time = '$o{time}'
-		  AND	vpn_ip4 = '$o{vpn_ip4}'
-		  AND	cn = $o{cn}
-		  AND	instance_id = '$iid'
-		ORDER BY
-			id DESC
-		LIMIT	1
-	});
-	$sth->execute;
-	my $id = $sth->fetchrow_array
-		or die "No matching connection entry found";
+	my $id = match_session_id($iid);
 
 	# Update session details with disconnect values:
 	$o{disconnect_time} = $o{time} + $o{duration};
@@ -188,6 +179,31 @@ sub disconnect {
 			session
 		SET
 			disconnect_time = '$o{disconnect_time}',
+			duration = '$o{duration}',
+			bytes_in = '$o{bytes_in}',
+			bytes_out = '$o{bytes_out}'
+		WHERE
+			id = '$id'
+	});
+	$sth->execute;
+	$dbh->commit;
+}
+
+# Update a session
+sub update {
+	my $sth;
+	my $iid = get_instance('');
+	my $id = match_session_id($iid);
+
+	# Calculate current duration, and basic sanity check:
+	$o{duration} = time() - $o{time};
+	$o{duration} >= 0 or die "Failed update: time has gone backwards";
+
+	# Update session details with supplied values:
+	$sth = $dbh->prepare(qq{
+		UPDATE OR FAIL
+			session
+		SET
 			duration = '$o{duration}',
 			bytes_in = '$o{bytes_in}',
 			bytes_out = '$o{bytes_out}'
@@ -236,5 +252,30 @@ sub add_instance {
 		)
 	});
 	return get_instance('');
+}
+
+sub match_session_id {
+	my ($iid) = @_;
+	my $sth;
+	# Associate with the connect session using env-vars:
+	$sth = $dbh->prepare(qq{
+		SELECT	id
+		FROM	session
+		WHERE
+			disconnect_time is null
+		  AND	connect_time = '$o{time}'
+		  AND	src_ip = '$o{src_ip}'
+		  AND	src_port = '$o{src_port}'
+		  AND	vpn_ip4 = '$o{vpn_ip4}'
+		  AND	cn = $o{cn}
+		  AND	instance_id = '$iid'
+		ORDER BY
+			id DESC
+		LIMIT	1
+	});
+	$sth->execute;
+	my $id = $sth->fetchrow_array
+		or die "No matching connection entry found";
+	return $id;
 }
 
