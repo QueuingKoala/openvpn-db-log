@@ -50,7 +50,6 @@ $i{port} >= 0 and $i{port} <= 65535
 # Disconnect will add to this hash later if needed
 my %o = (
 	time		=> 'time_unix',
-	src_ip		=> 'trusted_ip',
 	src_port	=> 'trusted_port',
 	vpn_ip4		=> 'ifconfig_pool_remote_ip',
 	cn		=> 'common_name',
@@ -83,6 +82,14 @@ for my $key (keys %o) {
 		or failure("ERR: missing env-var: $var");
 	$o{$key} = $ENV{$var};
 }
+
+# Need either trusted_ip or trusted_ip6 from env:
+for $var (qw(trusted_ip trusted_ip6)) {
+	defined $ENV{$var}
+		and $o{src_ip} = $ENV{$var};
+}
+defined $o{src_ip}
+	or failure("ERR: missing env-var: trusted_ip");
 
 # Connect to the SQL DB
 my $dbh;
