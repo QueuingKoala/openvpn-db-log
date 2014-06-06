@@ -262,7 +262,7 @@ sub match_session_id {
 		SELECT	id
 		FROM	session
 		WHERE
-			disconnect_time is null
+			disconnect_time IS NULL
 		  AND	connect_time = '$o{time}'
 		  AND	src_ip = '$o{src_ip}'
 		  AND	src_port = '$o{src_port}'
