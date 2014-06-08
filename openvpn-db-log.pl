@@ -225,7 +225,7 @@ sub get_instance {
 		FROM	instance
 		WHERE
 			name = $i{name}
-		  AND	port = $i{port}
+		  AND	port = '$i{port}'
 		  AND	protocol = $i{proto}
 		ORDER BY
 			id ASC
@@ -250,7 +250,7 @@ sub add_instance {
 		)
 		values (
 			$i{name},
-			$i{port},
+			'$i{port}',
 			$i{proto}
 		)
 	});
