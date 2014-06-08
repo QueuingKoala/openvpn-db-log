@@ -100,6 +100,9 @@ for $var (qw(trusted_ip trusted_ip6)) {
 defined $o{src_ip}
 	or failure("ERR: missing env-var: trusted_ip");
 
+# Don't block unless failure is fatal to the invoking process
+fork and exit 0 unless $rc_fail > 0;
+
 # Connect to the SQL DB
 my $dbh;
 $dbh = DBI->connect(
