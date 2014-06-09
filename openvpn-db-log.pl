@@ -10,21 +10,22 @@
 use strict;
 use Getopt::Long;
 use DBI;
+Getopt::Long::Configure ("bundling");
 
 my $db;
 my ($host, $port) = ('', '');
 my $user = undef;
 my $pass = undef;
 my $backend = "SQLite";
-my $rc_fail = 0;
-my $silent = '';
+my $fork = 0;
+my $silent = 0;
 my %i = (
 	name	=> '',
 	proto	=> '',
 	port	=> 0,
 );
 GetOptions(
-	"fatal-failure|F!"	=> \$rc_fail,
+	"fork|f!"		=> \$fork,
 	"quiet|q!"		=> \$silent,
 	"backend|b=s"		=> \$backend,
 	"database|db|d=s"	=> \$db,
@@ -100,8 +101,8 @@ for $var (qw(trusted_ip trusted_ip6)) {
 defined $o{src_ip}
 	or failure("ERR: missing env-var: trusted_ip");
 
-# Don't block unless failure is fatal to the invoking process
-fork and exit 0 unless $rc_fail > 0;
+# When forking, exit success and continue SQL tasks as the child process
+fork and exit 0 if $fork;
 
 # Connect to the SQL DB
 my $dbh;
@@ -136,11 +137,15 @@ if ($@) {
 	failure($msg);
 }
 
+# Success otherwise
+exit 0;
+
 # Exit handler, for message display and return code control
 sub failure {
 	my ($msg) = @_;
 	warn "$msg" if $msg and not $silent;
-	exit $rc_fail;
+	exit 1 unless $fork;
+	exit 0;
 };
 
 # Insert the connect data
