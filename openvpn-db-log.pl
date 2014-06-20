@@ -24,6 +24,10 @@ my %i = (
 	proto	=> '',
 	port	=> 0,
 );
+my %status = (
+	need_success	=> 0,
+	version		=> 3,
+);
 GetOptions(
 	"fork|f!"		=> \$fork,
 	"quiet|q!"		=> \$silent,
@@ -35,6 +39,9 @@ GetOptions(
 	"instance-name|n=s"	=> \$i{name},
 	"instance-proto|r=s"	=> \$i{proto},
 	"instance-port|o=i"	=> \$i{port},
+	"status-file|S:s"	=> \$status{file},
+	"status-version|V=i"	=> \$status{version},
+	"status-need-success|N"	=> \$status{need_success},
 );
 
 # Verify CLI opts
@@ -47,6 +54,11 @@ length($i{proto}) <= 10
 $i{port} >= 0 and $i{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
 
+my $dbh;
+
+# Status file processing won't continue below
+status_proc() if defined $status{file};
+
 # Define env-vars to check, and shorter reference option names.
 # Disconnect/update will add to this hash later if needed
 my %o = (
@@ -57,8 +69,9 @@ my %o = (
 );
 
 # Set var requirements and sub handler depending on script_type
-my $type = $ENV{script_type}
-	or failure("ERR: script_type is unset");
+my $type;
+$type = $ENV{script_type}
+	or failure("Missing required script_type env-var");
 my $handler = \&connect;
 if ( $type =~ /^client-disconnect$/ ) {
 	$handler = \&disconnect;
@@ -70,7 +83,7 @@ if ( $type =~ /^client-disconnect$/ ) {
 		bytes_out	=> 'bytes_sent',
 	);
 }
-elsif ( $type =~ /^client-update$/) {
+elsif ( $type =~ /^db-update$/) {
 	$handler = \&update;
 	# vars required for updates:
 	%o = (
@@ -104,25 +117,10 @@ defined $o{src_ip}
 # When forking, exit success and continue SQL tasks as the child process
 fork and exit 0 if $fork;
 
-# Connect to the SQL DB
-my $dbh;
-$dbh = DBI->connect(
-	"dbi:$backend:database=$db;host=$host;port=$port",
-	$user,
-	$pass, {
-		AutoCommit	=> 0,
-		PrintError	=> 0,
-	}
-);
-# Handle DB connect errors
-defined $dbh
-	or failure("DB connection failed: ($DBI::errstr)");
-$dbh->{RaiseError} = 1;
+db_connect();
 
-# Quote strings that may contain special chars:
+# CN may contain special chars:
 $o{cn} = $dbh->quote($o{cn});
-$i{name} = $dbh->quote($i{name});
-$i{proto} = $dbh->quote($i{proto});
 
 # Take the right DB update action depending on script type.
 # Any database errors escape the eval to be handled below.
@@ -131,11 +129,7 @@ eval {
 };
 
 # Handle any DB transaction errors from the handler sub
-if ($@) {
-	my $msg = "$@";
-	eval { $dbh->rollback; };
-	failure($msg);
-}
+db_rollback($@) if ($@);
 
 # Success otherwise
 exit 0;
@@ -144,13 +138,40 @@ exit 0;
 sub failure {
 	my ($msg) = @_;
 	warn "$msg" if $msg and not $silent;
-	exit 1 unless $fork;
-	exit 0;
+	exit 100;
 };
+
+# Generic DB error handler
+sub db_rollback {
+	my $msg = shift || "";
+	eval { $dbh->rollback; };
+	failure($msg);
+}
+
+# Connect to the SQL DB
+sub db_connect {
+	$dbh = DBI->connect(
+		"dbi:$backend:database=$db;host=$host;port=$port",
+		$user,
+		$pass, {
+			AutoCommit	=> 0,
+			PrintError	=> 0,
+		}
+	);
+
+	# Handle DB connect errors
+	defined $dbh
+		or failure("DB connection failed: ($DBI::errstr)");
+	$dbh->{RaiseError} = 1;
+
+	# DB-quote strings from instance options:
+	$i{name} = $dbh->quote($i{name});
+	$i{proto} = $dbh->quote($i{proto});
+}
 
 # Insert the connect data
 sub connect {
-	my $iid = get_instance();
+	my $iid = get_instance(create => 1);
 	$dbh->do(qq{
 		INSERT INTO
 		session (
@@ -177,7 +198,7 @@ sub connect {
 # Insert the disconnect data
 sub disconnect {
 	my $sth;
-	my $iid = get_instance('');
+	my $iid = get_instance();
 	my $id = match_session_id($iid);
 
 	# Update session details with disconnect values:
@@ -199,12 +220,17 @@ sub disconnect {
 
 # Update a session
 sub update {
+	my %f_opt = (
+		commit => 1,
+		@_
+	);
+	my $iid = $f_opt{iid} || get_instance();
+	my $update_time = $o{time_update} || time();
 	my $sth;
-	my $iid = get_instance('');
 	my $id = match_session_id($iid);
 
 	# Calculate current duration, and basic sanity check:
-	$o{duration} = time() - $o{time};
+	$o{duration} = $update_time - $o{time};
 	$o{duration} >= 0 or die "Failed update: time has gone backwards";
 
 	# Update session details with supplied values:
@@ -219,12 +245,16 @@ sub update {
 			id = '$id'
 	});
 	$sth->execute;
-	$dbh->commit;
+	$dbh->commit if ( $f_opt{commit} );
 }
 
+# Get ID of an instance.
+# When the `create` opt is true, will attempt to create if needed
 sub get_instance {
-	my ($init) = @_;
-	defined $init or $init = 1;
+	my %f_opt = (
+		create	=> 0,
+		@_
+	);
 	my $sth = $dbh->prepare(qq{
 		SELECT	id
 		FROM	instance
@@ -239,7 +269,7 @@ sub get_instance {
 	$sth->execute;
 	my $id = $sth->fetchrow_array;
 	# Try to add instance details if none present
-	if (! defined $id and $init) {
+	if ( ! defined $id and ($f_opt{create}) ) {
 		$id = add_instance();
 	}
 	return $id if defined $id;
@@ -259,7 +289,7 @@ sub add_instance {
 			$i{proto}
 		)
 	});
-	return get_instance('');
+	return get_instance();
 }
 
 sub match_session_id {
@@ -285,5 +315,89 @@ sub match_session_id {
 	my $id = $sth->fetchrow_array
 		or die "No matching connection entry found";
 	return $id;
+}
+
+# Process a status file
+sub status_proc {
+	my $input;
+	my $delim;
+	$delim = "\t" if ($status{version} == 3);
+	$delim = "," if ($status{version} == 2);
+	defined $delim or failure("Invalid status version: must be 2 or 3");
+
+	if ( length($status{file}) > 0 ) {
+		open($input, "<", $status{file})
+			or failure("Failed to open '$status{file}' for reading");
+	}
+	else {
+		open($input, "<-")
+			or failure("Failed to open STDIN for status reading");
+	}
+
+	# DB setup:
+	db_connect();
+	# Pull the instance-ID out early to avoid re-quering each call to update()
+	my $iid;
+	eval {
+		my $iid = get_instance();
+	};
+	failure($@) if ($@);
+
+	my @fields;
+	my $bad_lines = 0;
+	while (<$input>) {
+		chomp;
+		# pull out time:
+		if ( /^TIME$delim.*$delim([0-9]+)$/ ) {
+			$o{time_update} = $1;
+		}
+		next unless defined $o{time_update};
+
+		# Otherwise process client list lines.
+		next unless /^CLIENT_LIST($delim.*){8}/;
+		@fields = split /$delim/;
+		shift @fields;
+
+		# CN can have a comma, so process records from the right until then.
+		for my $key (qw(user time junk bytes_out bytes_in vpn_ip4 remote)) {
+			$o{$key} = pop @fields;
+		}
+
+		# Remainder is the CN:
+		$o{cn} = $dbh->quote( join('', @fields) );
+
+		# pull source IP/port:
+		if ( $o{remote} =~ /^(.+):([0-9]+)$/ ) {
+			$o{src_ip} = $1;
+			$o{src_port} = $2;
+		}
+		else {
+			$bad_lines += 1;
+			next;
+		}
+
+		# Now perform the update, which uses values assigned to %o:
+		eval {
+			update(
+				iid	=> $iid,
+				commit	=> 0,
+			);
+		};
+		# Error handling:
+		# Only do a rollback when 100% success is required:
+		db_rollback($@) if ($@) and ($status{need_success});
+		# Otherwise just count the failure:
+		$bad_lines += 1 if ($@);
+	}
+
+	# Final DB commit:
+	eval {
+		$dbh->commit();
+	};
+	# Error handling:
+	db_rollback($@) if ($@);
+
+	$bad_lines = 99 if ($bad_lines > 99);
+	exit $bad_lines;
 }
 
