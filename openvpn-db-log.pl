@@ -375,16 +375,8 @@ sub status_proc {
 			or failure("Failed to open STDIN for status reading");
 	}
 
-	# DB setup:
-	db_connect();
-	# Pull the instance-ID out early to avoid re-quering each call to update()
-	my $iid;
-	eval {
-		my $iid = get_instance();
-	};
-	failure($@) if ($@);
-
 	my @fields;
+	my $iid;
 	my $sth_update;
 	my $sth_sess;
 	my $bad_lines = 0;
@@ -419,8 +411,17 @@ sub status_proc {
 			next;
 		}
 
-		$sth_sess = session_prepare() unless defined $sth_sess;
-		$sth_update = update_prepare() unless defined $sth_update;
+		# Do any delayed DB setup tasks now that we have a real line:
+		if ( ! defined $dbh ) {
+			eval {
+				db_connect();
+				$iid = get_instance();
+				$sth_sess = session_prepare();
+				$sth_update = update_prepare();
+			};
+			failure ($@) if ($@);
+		}
+
 		# Now perform the update, which uses values assigned to %o:
 		eval {
 			update(
