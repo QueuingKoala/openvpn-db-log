@@ -12,30 +12,36 @@ use Getopt::Long;
 use DBI;
 Getopt::Long::Configure ("bundling");
 
-my $db;
-my ($host, $port) = ('', '');
-my $user = undef;
-my $pass = undef;
-my $backend = "SQLite";
-my $fork = 0;
-my $silent = 0;
+# Database vars:
+my %db = (
+	backend	=> "SQLite",
+	host	=> "",
+	port	=> "",
+);
+# Common config vars:
+my %g = (
+	fork	=> 0,
+	silent	=> 0,
+);
+# Instance vars:
 my %i = (
 	name	=> '',
 	proto	=> '',
 	port	=> 0,
 );
+# Status file vars:
 my %status = (
 	need_success	=> 0,
 	version		=> 3,
 );
 GetOptions(
-	"fork|f!"		=> \$fork,
-	"quiet|q!"		=> \$silent,
-	"backend|b=s"		=> \$backend,
-	"database|db|d=s"	=> \$db,
-	"host|h=s"		=> \$host,
-	"user|u=s"		=> \$user,
-	"password|pass|p=s"	=> \$pass,
+	"fork|f!"		=> \$g{fork},
+	"quiet|q!"		=> \$g{silent},
+	"backend|b=s"		=> \$db{backend},
+	"database|db|d=s"	=> \$db{db},
+	"host|h=s"		=> \$db{host},
+	"user|u=s"		=> \$db{user},
+	"password|pass|p=s"	=> \$db{pass},
 	"instance-name|n=s"	=> \$i{name},
 	"instance-proto|r=s"	=> \$i{proto},
 	"instance-port|o=i"	=> \$i{port},
@@ -45,7 +51,7 @@ GetOptions(
 );
 
 # Verify CLI opts
-defined $db or
+defined $db{db} or
 	failure("Options error: No database specified");
 length($i{name}) <= 64
 	or failure("Options error: instance-name too long (>64)");
@@ -53,8 +59,6 @@ length($i{proto}) <= 10
 	or failure("Options error: instance-proto too long (>10)");
 $i{port} >= 0 and $i{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
-
-my $dbh;
 
 # Status file processing won't continue below
 status_proc() if defined $status{file};
@@ -115,7 +119,7 @@ defined $o{src_ip}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
-fork and exit 0 if $fork;
+fork and exit 0 if $g{fork};
 
 db_connect();
 
@@ -123,7 +127,7 @@ db_connect();
 # Any database errors escape the eval to be handled below.
 eval {
 	$handler->();
-	$dbh->commit();
+	$g{dbh}->commit();
 };
 
 # Handle any DB transaction errors from the handler sub
@@ -135,38 +139,38 @@ exit 0;
 # Exit handler, for message display and return code control
 sub failure {
 	my ($msg) = @_;
-	warn "$msg" if $msg and not $silent;
+	warn "$msg" if $msg and not $g{silent};
 	exit 100;
 };
 
 # Generic DB error handler
 sub db_rollback {
 	my $msg = shift || "";
-	eval { $dbh->rollback; };
+	eval { $g{dbh}->rollback; };
 	failure($msg);
 }
 
 # Connect to the SQL DB
 sub db_connect {
-	$dbh = DBI->connect(
-		"dbi:$backend:database=$db;host=$host;port=$port",
-		$user,
-		$pass, {
+	$g{dbh} = DBI->connect(
+		"dbi:$db{backend}:database=$db{db};host=$db{host};port=$db{port}",
+		$db{user},
+		$db{pass}, {
 			AutoCommit	=> 0,
 			PrintError	=> 0,
 		}
 	);
 
 	# Handle DB connect errors
-	defined $dbh
+	defined $g{dbh}
 		or failure("DB connection failed: ($DBI::errstr)");
-	$dbh->{RaiseError} = 1;
+	$g{dbh}->{RaiseError} = 1;
 }
 
 # Insert the connect data
 sub connect {
 	my $iid = get_instance(create => 1);
-	$dbh->do(qq{
+	$g{dbh}->do(qq{
 		INSERT INTO
 		session (
 			connect_time,
@@ -196,7 +200,7 @@ sub disconnect {
 
 	# Update session details with disconnect values:
 	$o{disconnect_time} = $o{time} + $o{duration};
-	$sth = $dbh->do(qq{
+	$sth = $g{dbh}->do(qq{
 		UPDATE OR FAIL
 			session
 		SET
@@ -250,7 +254,7 @@ sub update {
 
 # Prepare update SQL
 sub update_prepare {
-	$dbh->prepare(qq{
+	$g{dbh}->prepare(qq{
 		UPDATE OR FAIL
 			session
 		SET
@@ -269,7 +273,7 @@ sub get_instance {
 		create	=> 0,
 		@_
 	);
-	my $sth = $dbh->prepare(qq{
+	my $sth = $g{dbh}->prepare(qq{
 		SELECT	id
 		FROM	instance
 		WHERE
@@ -296,7 +300,7 @@ sub get_instance {
 }
 
 sub add_instance {
-	$dbh->do(qq{
+	$g{dbh}->do(qq{
 		INSERT OR FAIL INTO instance (
 			name,
 			port,
@@ -336,7 +340,7 @@ sub match_session_id {
 
 # Prepare session matching SQL
 sub session_prepare {
-	$dbh->prepare(qq{
+	$g{dbh}->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
@@ -407,7 +411,7 @@ sub status_proc {
 		}
 
 		# Do any delayed DB setup tasks now that we have a real line:
-		if ( ! defined $dbh ) {
+		if ( ! defined $g{dbh} ) {
 			eval {
 				db_connect();
 				$iid = get_instance();
@@ -434,7 +438,7 @@ sub status_proc {
 
 	# Final DB commit:
 	eval {
-		$dbh->commit();
+		$g{dbh}->commit();
 	};
 	# Error handling:
 	db_rollback($@) if ($@);
