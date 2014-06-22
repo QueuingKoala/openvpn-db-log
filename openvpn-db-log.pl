@@ -123,6 +123,7 @@ db_connect();
 # Any database errors escape the eval to be handled below.
 eval {
 	$handler->();
+	$dbh->commit();
 };
 
 # Handle any DB transaction errors from the handler sub
@@ -185,7 +186,6 @@ sub connect {
 		$o{cn},
 		$iid,
 	);
-	$dbh->commit();
 }
 
 # Insert the disconnect data
@@ -214,15 +214,11 @@ sub disconnect {
 		$o{bytes_out},
 		$id,
 	);
-	$dbh->commit;
 }
 
 # Update a session
 sub update {
-	my %f_opt = (
-		commit => 1,
-		@_
-	);
+	my %f_opt = ( @_ );
 	my $sth;
 	my $sth_sess;
 	$sth = ${$f_opt{sth}} if defined $f_opt{sth};
@@ -250,7 +246,6 @@ sub update {
 		$o{bytes_out},
 		$id,
 	);
-	$dbh->commit if ( $f_opt{commit} );
 }
 
 # Prepare update SQL
@@ -426,7 +421,6 @@ sub status_proc {
 		eval {
 			update(
 				iid		=> $iid,
-				commit		=> 0,
 				sth		=> \$sth_update,
 				sth_sess	=> \$sth_sess,
 			);
