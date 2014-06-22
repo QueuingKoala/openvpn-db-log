@@ -119,9 +119,6 @@ fork and exit 0 if $fork;
 
 db_connect();
 
-# CN may contain special chars:
-$o{cn} = $dbh->quote($o{cn});
-
 # Take the right DB update action depending on script type.
 # Any database errors escape the eval to be handled below.
 eval {
@@ -163,10 +160,6 @@ sub db_connect {
 	defined $dbh
 		or failure("DB connection failed: ($DBI::errstr)");
 	$dbh->{RaiseError} = 1;
-
-	# DB-quote strings from instance options:
-	$i{name} = $dbh->quote($i{name});
-	$i{proto} = $dbh->quote($i{proto});
 }
 
 # Insert the connect data
@@ -182,39 +175,45 @@ sub connect {
 			cn,
 			instance_id
 		)
-		VALUES (
-			'$o{time}',
-			'$o{src_ip}',
-			'$o{src_port}',
-			'$o{vpn_ip4}',
-			$o{cn},
-			'$iid'
-		)
-
-	});
-	$dbh->commit;
+		VALUES (?, ?, ?, ?, ?, ?)
+		},
+		undef,
+		$o{time},
+		$o{src_ip},
+		$o{src_port},
+		$o{vpn_ip4},
+		$o{cn},
+		$iid,
+	);
+	$dbh->commit();
 }
 
 # Insert the disconnect data
 sub disconnect {
 	my $sth;
 	my $iid = get_instance();
-	my $id = match_session_id($iid);
+	my $id = match_session_id(iid => $iid);
 
 	# Update session details with disconnect values:
 	$o{disconnect_time} = $o{time} + $o{duration};
-	$sth = $dbh->prepare(qq{
+	$sth = $dbh->do(qq{
 		UPDATE OR FAIL
 			session
 		SET
-			disconnect_time = '$o{disconnect_time}',
-			duration = '$o{duration}',
-			bytes_in = '$o{bytes_in}',
-			bytes_out = '$o{bytes_out}'
+			disconnect_time = ?,
+			duration = ?,
+			bytes_in = ?,
+			bytes_out = ?
 		WHERE
-			id = '$id'
-	});
-	$sth->execute;
+			id = ?
+		},
+		undef,
+		$o{disconnect_time},
+		$o{duration},
+		$o{bytes_in},
+		$o{bytes_out},
+		$id,
+	);
 	$dbh->commit;
 }
 
@@ -224,28 +223,48 @@ sub update {
 		commit => 1,
 		@_
 	);
+	my $sth;
+	my $sth_sess;
+	$sth = ${$f_opt{sth}} if defined $f_opt{sth};
+	$sth_sess = ${$f_opt{sth_sess}} if defined $f_opt{sth_sess};
 	my $iid = $f_opt{iid} || get_instance();
 	my $update_time = $o{time_update} || time();
-	my $sth;
-	my $id = match_session_id($iid);
+
+	my $id = match_session_id(
+		iid	=> $iid,
+		sth	=> \$sth_sess
+	);
 
 	# Calculate current duration, and basic sanity check:
 	$o{duration} = $update_time - $o{time};
 	$o{duration} >= 0 or die "Failed update: time has gone backwards";
 
+	if ( ! defined $sth ) {
+		$sth = update_prepare();
+	}
+
 	# Update session details with supplied values:
-	$sth = $dbh->prepare(qq{
+	$sth->execute(
+		$o{duration},
+		$o{bytes_in},
+		$o{bytes_out},
+		$id,
+	);
+	$dbh->commit if ( $f_opt{commit} );
+}
+
+# Prepare update SQL
+sub update_prepare {
+	$dbh->prepare(qq{
 		UPDATE OR FAIL
 			session
 		SET
-			duration = '$o{duration}',
-			bytes_in = '$o{bytes_in}',
-			bytes_out = '$o{bytes_out}'
+			duration = ?,
+			bytes_in = ?,
+			bytes_out = ?
 		WHERE
-			id = '$id'
+			id = ?
 	});
-	$sth->execute;
-	$dbh->commit if ( $f_opt{commit} );
 }
 
 # Get ID of an instance.
@@ -259,15 +278,20 @@ sub get_instance {
 		SELECT	id
 		FROM	instance
 		WHERE
-			name = $i{name}
-		  AND	port = '$i{port}'
-		  AND	protocol = $i{proto}
+			name = ?
+		  AND	port = ?
+		  AND	protocol = ?
 		ORDER BY
 			id ASC
 		LIMIT	1
 	});
-	$sth->execute;
+	$sth->execute(
+		$i{name},
+		$i{port},
+		$i{proto},
+	);
 	my $id = $sth->fetchrow_array;
+
 	# Try to add instance details if none present
 	if ( ! defined $id and ($f_opt{create}) ) {
 		$id = add_instance();
@@ -283,38 +307,55 @@ sub add_instance {
 			port,
 			protocol
 		)
-		values (
-			$i{name},
-			'$i{port}',
-			$i{proto}
-		)
-	});
+		values (?, ?, ?)
+		},
+		undef,
+		$i{name},
+		$i{port},
+		$i{proto},
+
+	);
 	return get_instance();
 }
 
 sub match_session_id {
-	my ($iid) = @_;
+	my %f_opt = ( @_ );
 	my $sth;
+	$sth = ${$f_opt{sth}} if defined $f_opt{sth};
 	# Associate with the connect session using env-vars:
-	$sth = $dbh->prepare(qq{
+	if ( ! defined $sth ) {
+		$sth = session_prepare();
+	}
+	$sth->execute(
+		$o{time},
+		$o{src_ip},
+		$o{src_port},
+		$o{vpn_ip4},
+		$o{cn},
+		$f_opt{iid},
+	);
+	my $id = $sth->fetchrow_array
+		or die "No matching connection entry found";
+	return $id;
+}
+
+# Prepare session matching SQL
+sub session_prepare {
+	$dbh->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
 			disconnect_time IS NULL
-		  AND	connect_time = '$o{time}'
-		  AND	src_ip = '$o{src_ip}'
-		  AND	src_port = '$o{src_port}'
-		  AND	vpn_ip4 = '$o{vpn_ip4}'
-		  AND	cn = $o{cn}
-		  AND	instance_id = '$iid'
+		  AND	connect_time = ?
+		  AND	src_ip = ?
+		  AND	src_port = ?
+		  AND	vpn_ip4 = ?
+		  AND	cn = ?
+		  AND	instance_id = ?
 		ORDER BY
 			id DESC
 		LIMIT	1
 	});
-	$sth->execute;
-	my $id = $sth->fetchrow_array
-		or die "No matching connection entry found";
-	return $id;
 }
 
 # Process a status file
@@ -344,6 +385,8 @@ sub status_proc {
 	failure($@) if ($@);
 
 	my @fields;
+	my $sth_update;
+	my $sth_sess;
 	my $bad_lines = 0;
 	while (<$input>) {
 		chomp;
@@ -364,7 +407,7 @@ sub status_proc {
 		}
 
 		# Remainder is the CN:
-		$o{cn} = $dbh->quote( join('', @fields) );
+		$o{cn} = join('', @fields);
 
 		# pull source IP/port:
 		if ( $o{remote} =~ /^(.+):([0-9]+)$/ ) {
@@ -376,11 +419,15 @@ sub status_proc {
 			next;
 		}
 
+		$sth_sess = session_prepare() unless defined $sth_sess;
+		$sth_update = update_prepare() unless defined $sth_update;
 		# Now perform the update, which uses values assigned to %o:
 		eval {
 			update(
-				iid	=> $iid,
-				commit	=> 0,
+				iid		=> $iid,
+				commit		=> 0,
+				sth		=> \$sth_update,
+				sth_sess	=> \$sth_sess,
 			);
 		};
 		# Error handling:
