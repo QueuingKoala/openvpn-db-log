@@ -12,6 +12,40 @@ use Getopt::Long;
 use DBI;
 Getopt::Long::Configure ("bundling");
 
+sub usage {
+	printf q{Options:
+
+Database options:
+  --database, -db -d
+      The database to connect to. Mandatory.
+  --backend, -b
+      The backend to use. Defaults to "SQLite".
+  --host, -h
+      Database host to connect to.
+  --user, -u
+      Database username.
+  --password, pass, -p
+      Database password.
+
+Basic options:
+  --fork, -f
+      Return success (code 0) and fork SQL processing.  This can be
+      useful to avoid delaying a connecting client or causing database
+      failure to reject the connection.
+  --silent, -s
+      Do not report any errors to STDERR. The exit code is still set.
+
+Instance options:
+  --instance-name, -n
+      A text string naming this OpenVPN instance. Up to 64 chars.
+  --instance-proto, -r
+      A text string naming the this OpenVPN instance protocol. Up to 10 chars.
+  --instance-port, -o
+      The port number for this OpenVPN instance.
+};
+        exit 0;
+}
+
 # Database vars:
 my %db = (
 	backend	=> "SQLite",
@@ -48,6 +82,7 @@ GetOptions(
 	"status-file|S:s"	=> \$status{file},
 	"status-version|V=i"	=> \$status{version},
 	"status-need-success|N"	=> \$status{need_success},
+        "help|usage|h"          => \&usage,
 );
 
 # Verify CLI opts
