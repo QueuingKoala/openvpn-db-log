@@ -13,13 +13,13 @@ use DBI;
 Getopt::Long::Configure ("bundling");
 
 sub usage {
-	printf q{Options:
+	printf q{OPTIONS:
 
 Database options:
   --database, -db -d
       The database to connect to. Mandatory.
   --backend, -b
-      The backend to use. Defaults to "SQLite".
+      The Perl DBI backend to use. Defaults to "SQLite".
   --host, -h
       Database host to connect to.
   --user, -u
@@ -29,21 +29,27 @@ Database options:
 
 Basic options:
   --fork, -f
-      Return success (code 0) and fork SQL processing.  This can be
-      useful to avoid delaying a connecting client or causing database
-      failure to reject the connection.
+      After basic option checking, exit code 0 and fork for SQL processing.
   --silent, -s
-      Do not report any errors to STDERR. The exit code is still set.
+      Do not report any errors to STDERR (does not change the exit code.)
   --zero, -z
       Failure exits with code 0, primarily for systems lacking Perl fork().
+  --help, --usage, -h
+      You're reading it.
 
 Instance options:
-  --instance-name, -n
-      A text string naming this OpenVPN instance. Up to 64 chars.
-  --instance-proto, -r
-      A text string naming the this OpenVPN instance protocol. Up to 10 chars.
+  --instance-name, -n (up to 64 chars)
+  --instance-proto, -r (up to 10 chars)
   --instance-port, -o
-      The port number for this OpenVPN instance.
+      Optional values to identify a unique OpenVPN instance (see docs.)
+
+Status file processing:
+  --status-file, -S
+      Path to the status file. Supply an empty string argument for STDIN.
+  --status-version, -V
+      OpenVPN status format version. Must be 2 or 3, and defaults to 3.
+  --status-need-success, -N
+      Refuse the update if any client entries fail (see docs.)
 };
         exit 0;
 }
