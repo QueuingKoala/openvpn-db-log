@@ -258,38 +258,17 @@ sub disconnect {
 # Update a session
 sub update {
 	my %f_opt = ( @_ );
-	my $sth;
-	my $sth_sess;
-	$sth = ${$f_opt{sth}} if defined $f_opt{sth};
-	$sth_sess = ${$f_opt{sth_sess}} if defined $f_opt{sth_sess};
 	my $iid = $f_opt{iid} || get_instance();
 	my $update_time = $o{time_update} || time();
 
-	my $id = match_session_id(
-		iid	=> $iid,
-		sth	=> \$sth_sess
-	);
+	my $id = match_session_id( iid => $iid );
 
 	# Calculate current duration, and basic sanity check:
 	$o{duration} = $update_time - $o{time};
 	$o{duration} >= 0 or die "Failed update: time has gone backwards";
 
-	if ( ! defined $sth ) {
-		$sth = update_prepare();
-	}
-
-	# Update session details with supplied values:
-	$sth->execute(
-		$o{duration},
-		$o{bytes_in},
-		$o{bytes_out},
-		$id,
-	);
-}
-
-# Prepare update SQL
-sub update_prepare {
-	$g{dbh}->prepare(qq{
+	# Prepare update query, unless we have one
+	defined $g{sth_update} or $g{sth_update} = $g{dbh}->prepare(qq{
 		UPDATE OR FAIL
 			session
 		SET
@@ -299,6 +278,14 @@ sub update_prepare {
 		WHERE
 			id = ?
 	});
+
+	# Update session details with supplied values:
+	$g{sth_update}->execute(
+		$o{duration},
+		$o{bytes_in},
+		$o{bytes_out},
+		$id,
+	);
 }
 
 # Get ID of an instance.
@@ -352,30 +339,11 @@ sub add_instance {
 	return get_instance();
 }
 
+# Associate with the connect session using env-vars:
 sub match_session_id {
 	my %f_opt = ( @_ );
-	my $sth;
-	$sth = ${$f_opt{sth}} if defined $f_opt{sth};
-	# Associate with the connect session using env-vars:
-	if ( ! defined $sth ) {
-		$sth = session_prepare();
-	}
-	$sth->execute(
-		$o{time},
-		$o{src_ip},
-		$o{src_port},
-		$o{vpn_ip4},
-		$o{cn},
-		$f_opt{iid},
-	);
-	my $id = $sth->fetchrow_array
-		or die "No matching connection entry found";
-	return $id;
-}
-
-# Prepare session matching SQL
-sub session_prepare {
-	$g{dbh}->prepare(qq{
+	# Prepare session query, unless we have one
+	defined $g{sth_session} or $g{sth_session} = $g{dbh}->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
@@ -390,6 +358,19 @@ sub session_prepare {
 			id DESC
 		LIMIT	1
 	});
+
+	# Then run the query on the client option data
+	$g{sth_session}->execute(
+		$o{time},
+		$o{src_ip},
+		$o{src_port},
+		$o{vpn_ip4},
+		$o{cn},
+		$f_opt{iid},
+	);
+	my $id = $g{sth_session}->fetchrow_array
+		or die "No matching connection entry found";
+	return $id;
 }
 
 # Process a status file
@@ -411,8 +392,6 @@ sub status_proc {
 
 	my @fields;
 	my $iid;
-	my $sth_update;
-	my $sth_sess;
 	my $bad_lines = 0;
 	while (<$input>) {
 		chomp;
@@ -450,19 +429,13 @@ sub status_proc {
 			eval {
 				db_connect();
 				$iid = get_instance();
-				$sth_sess = session_prepare();
-				$sth_update = update_prepare();
 			};
 			failure ($@) if ($@);
 		}
 
 		# Now perform the update, which uses values assigned to %o:
 		eval {
-			update(
-				iid		=> $iid,
-				sth		=> \$sth_update,
-				sth_sess	=> \$sth_sess,
-			);
+			update( iid => $iid );
 		};
 		# Error handling:
 		# Only do a rollback when 100% success is required:
