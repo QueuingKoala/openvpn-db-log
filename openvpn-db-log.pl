@@ -34,6 +34,8 @@ Basic options:
       failure to reject the connection.
   --silent, -s
       Do not report any errors to STDERR. The exit code is still set.
+  --zero, -z
+      Failure exits with code 0, primarily for systems lacking Perl fork().
 
 Instance options:
   --instance-name, -n
@@ -56,6 +58,7 @@ my %db = (
 my %g = (
 	fork	=> 0,
 	silent	=> 0,
+	rc_zero	=> 0,
 );
 # Instance vars:
 my %i = (
@@ -71,6 +74,7 @@ my %status = (
 GetOptions(
 	"fork|f!"		=> \$g{fork},
 	"quiet|q!"		=> \$g{silent},
+	"zero|z!"		=> \$g{rc_zero},
 	"backend|b=s"		=> \$db{backend},
 	"database|db|d=s"	=> \$db{db},
 	"host|h=s"		=> \$db{host},
@@ -154,7 +158,7 @@ defined $o{src_ip}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
-fork and exit 0 if $g{fork};
+db_fork() if ( $g{fork} );
 
 db_connect();
 
@@ -175,8 +179,17 @@ exit 0;
 sub failure {
 	my ($msg) = @_;
 	warn "$msg" if $msg and not $g{silent};
+	exit 0 if $g{rc_zero};
 	exit 100;
 };
+
+# Fork handler; closes standard file handles
+sub db_fork {
+	open(STDIN, "<", "/dev/null");
+	open(STDOUT, ">", "/dev/null");
+	open(STDERR, ">", "/dev/null");
+	fork and exit 0;
+}
 
 # Generic DB error handler
 sub db_rollback {
@@ -389,6 +402,8 @@ sub status_proc {
 		open($input, "<-")
 			or failure("Failed to open STDIN for status reading");
 	}
+
+	db_fork() if ( $g{fork} );
 
 	my @fields;
 	my $iid;
