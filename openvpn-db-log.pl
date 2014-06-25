@@ -472,6 +472,7 @@ sub status_proc {
 	# Error handling:
 	db_rollback($@) if ($@);
 
+	exit 0 if $g{rc_zero};
 	$bad_lines = 99 if ($bad_lines > 99);
 	exit $bad_lines;
 }
