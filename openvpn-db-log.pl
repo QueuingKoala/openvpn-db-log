@@ -255,7 +255,7 @@ sub disconnect {
 	# Update session details with disconnect values:
 	$o{disconnect_time} = $o{time} + $o{duration};
 	$sth = $g{dbh}->do(qq{
-		UPDATE OR FAIL
+		UPDATE
 			session
 		SET
 			disconnect_time = ?,
@@ -288,7 +288,7 @@ sub update {
 
 	# Prepare update query, unless we have one
 	defined $g{sth_update} or $g{sth_update} = $g{dbh}->prepare(qq{
-		UPDATE OR FAIL
+		UPDATE
 			session
 		SET
 			duration = ?,
@@ -342,7 +342,8 @@ sub get_instance {
 
 sub add_instance {
 	$g{dbh}->do(qq{
-		INSERT OR FAIL INTO instance (
+		INSERT INTO
+		instance (
 			name,
 			port,
 			protocol
