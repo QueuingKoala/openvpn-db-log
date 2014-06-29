@@ -17,11 +17,13 @@ sub usage {
 
 Database options:
   --database, -db -d
-      The database to connect to. Mandatory.
+      The database to connect to.
   --backend, -b
       The Perl DBI backend to use. Defaults to "SQLite".
-  --host, -h
+  --host, -H
       Database host to connect to.
+  --port, -t
+      Port number to connect to.
   --user, -u
       Database username.
   --password, pass, -p
@@ -55,10 +57,11 @@ Status file processing:
 }
 
 # Database vars:
+my %dsn;
 my %db = (
-	backend	=> "SQLite",
-	host	=> "",
-	port	=> "",
+	driver	=> "SQLite",
+	user	=> "",
+	pass	=> "",
 );
 # Common config vars:
 my %g = (
@@ -81,11 +84,12 @@ GetOptions(
 	"fork|f!"		=> \$g{fork},
 	"quiet|q!"		=> \$g{silent},
 	"zero|z!"		=> \$g{rc_zero},
-	"backend|b=s"		=> \$db{backend},
-	"database|db|d=s"	=> \$db{db},
-	"host|h=s"		=> \$db{host},
+	"backend|b=s"		=> \$db{driver},
 	"user|u=s"		=> \$db{user},
 	"password|pass|p=s"	=> \$db{pass},
+	"database|db|d=s"	=> \$dsn{database},
+	"host|H=s"		=> \$dsn{host},
+	"port|t=i"		=> \$dsn{port},
 	"instance-name|n=s"	=> \$i{name},
 	"instance-proto|r=s"	=> \$i{proto},
 	"instance-port|o=i"	=> \$i{port},
@@ -96,8 +100,6 @@ GetOptions(
 );
 
 # Verify CLI opts
-defined $db{db} or
-	failure("Options error: No database specified");
 length($i{name}) <= 64
 	or failure("Options error: instance-name too long (>64)");
 length($i{proto}) <= 10
@@ -206,8 +208,14 @@ sub db_rollback {
 
 # Connect to the SQL DB
 sub db_connect {
+	my $driver_dsn = "";
+	for my $key (keys %dsn) {
+		next unless defined $dsn{$key};
+		$driver_dsn .= "$key=$dsn{$key};";
+	}
+	$driver_dsn =~ s/;$//;
 	$g{dbh} = DBI->connect(
-		"dbi:$db{backend}:database=$db{db};host=$db{host};port=$db{port}",
+		"dbi:$db{driver}:$driver_dsn",
 		$db{user},
 		$db{pass}, {
 			AutoCommit	=> 0,
