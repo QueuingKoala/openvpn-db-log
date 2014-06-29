@@ -28,6 +28,9 @@ Database options:
       Database username.
   --password, pass, -p
       Database password.
+  --dsn
+      An advanced method to define DB DSN options in the form: opt=value
+      See docs for details.
 
 Basic options:
   --fork, -f
@@ -90,6 +93,7 @@ GetOptions(
 	"database|db|d=s"	=> \$dsn{database},
 	"host|H=s"		=> \$dsn{host},
 	"port|t=i"		=> \$dsn{port},
+	"dsn=s"			=> \%dsn,
 	"instance-name|n=s"	=> \$i{name},
 	"instance-proto|r=s"	=> \$i{proto},
 	"instance-port|o=i"	=> \$i{port},

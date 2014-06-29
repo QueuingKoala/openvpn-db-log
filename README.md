@@ -96,6 +96,26 @@ available.
 
   The exit code is not changed, but can be combined with the --zero flag.
 
+Custom database DSN options
+---------------------------
+
+As an advanced/alternative form to provide database values like the database
+name, host, port, etc, the --dsn command line option allows you to set any DSN
+attribute you would like. This also works for non-standard values if your
+specific database backend requires one.
+
+The form of this option is: `--dsn opt=value`
+
+This method can NOT be used to define the backend driver (-b) or the user/pass
+(-u/-p) options. This is only valid for the database DSN options.
+
+For example, the following two calls are identical:
+
+    openvpn-db-log -b mysql -d vpn_db -H localhost -t 3306 -u db_user -p db_pass
+
+    openvpn-db-log -b mysql --dsn database=vpn_db --dsn host=localhost \
+      --dsn port=3306 -u db_user -p db_pass
+
 Processing status files
 -----------------------
 
