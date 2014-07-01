@@ -29,6 +29,8 @@ Database options:
       Database username.
   --password, pass, -p
       Database password.
+  --credentials, --cred, -C
+      File for database authentication, user/pass on first 2 lines.
   --dsn
       An advanced method to define DB DSN options in the form: opt=value
       See docs for details.
@@ -93,6 +95,7 @@ GetOptions(
 	"backend|b=s"		=> \$db{driver},
 	"user|u=s"		=> \$db{user},
 	"password|pass|p=s"	=> \$db{pass},
+	"credentials|creds|C=s"	=> \$db{creds},
 	"database|db|d=s"	=> \$dsn{database},
 	"host|H=s"		=> \$dsn{host},
 	"port|t=i"		=> \$dsn{port},
@@ -114,6 +117,8 @@ length($i{proto}) <= 10
 	or failure("Options error: instance-proto too long (>10)");
 $i{port} >= 0 and $i{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
+
+read_creds() if defined $db{creds};
 
 # Status file processing won't continue below
 status_proc() if defined $status{file};
@@ -198,6 +203,22 @@ sub failure {
 	exit 0 if $g{rc_zero};
 	exit 100;
 };
+
+# Credentials processing
+sub read_creds {
+	open(my $fh, "<", $db{creds})
+		or failure("Unable to open credentials file");
+	my ($user, $pass);
+	while (<$fh>) {
+		chomp($pass = $_) if ($user);
+		chomp($user = $_) unless defined $user;
+		last if $. == 2;
+	}
+	close($fh);
+	defined $pass or failure("Invalid credentials file");
+	$db{user} = $user;
+	$db{pass} = $pass;
+}
 
 # Fork handler; closes standard file handles
 sub db_fork {

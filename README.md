@@ -61,6 +61,12 @@ database name, and user credentials. See the `Database options` help output for
 the program flags for each. If your particular database doesn't require one of
 these, simply omit the option.
 
+## Database credentials
+
+  If your database backend requires credentials, you can supply them either with
+  the --user / --pass options, or with a --credentials (-C) file. When used, the
+  first 2 lines of this file will be taken as the user and password.
+
 Standard features
 -----------------
 
