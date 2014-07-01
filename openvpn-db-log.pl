@@ -13,10 +13,11 @@ use DBI;
 Getopt::Long::Configure ("bundling");
 
 sub usage {
-	printf q{OPTIONS:
+	printf <<EOM;
+OPTIONS:
 
 Database options:
-  --database, -db -d
+  --database, --db -d
       The database to connect to.
   --backend, -b
       The Perl DBI backend to use. Defaults to "SQLite".
@@ -35,7 +36,7 @@ Database options:
 Basic options:
   --fork, -f
       After basic option checking, exit code 0 and fork for SQL processing.
-  --silent, -s
+  --quiet, -q
       Do not report any errors to STDERR (does not change the exit code.)
   --zero, -z
       Failure exits with code 0, primarily for systems lacking Perl fork().
@@ -57,7 +58,7 @@ Status file processing:
       Refuse the update if any client entries fail (see docs.)
   --status-age, -A
       Maximum allowable age in seconds of the status file timestamp.
-};
+EOM
         exit 0;
 }
 
@@ -71,7 +72,7 @@ my %db = (
 # Common config vars:
 my %g = (
 	fork	=> 0,
-	silent	=> 0,
+	quiet	=> 0,
 	rc_zero	=> 0,
 );
 # Instance vars:
@@ -87,7 +88,7 @@ my %status = (
 );
 GetOptions(
 	"fork|f!"		=> \$g{fork},
-	"quiet|q!"		=> \$g{silent},
+	"quiet|q!"		=> \$g{quiet},
 	"zero|z!"		=> \$g{rc_zero},
 	"backend|b=s"		=> \$db{driver},
 	"user|u=s"		=> \$db{user},
@@ -193,7 +194,7 @@ exit 0;
 # Exit handler, for message display and return code control
 sub failure {
 	my ($msg) = @_;
-	warn "$msg" if $msg and not $g{silent};
+	warn "$msg" if $msg and not $g{quiet};
 	exit 0 if $g{rc_zero};
 	exit 100;
 };

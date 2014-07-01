@@ -90,9 +90,9 @@ available.
   For this, enable the --zero (-z) flag. Error messages are still printed to
   standard error.
 
-## Silent: do not print error text
+## Quiet: do not print error text
 
-  To disable printing of error messages, pass the --silent (-s) flag.
+  To disable printing of error messages, pass the --quiet (-q) flag.
 
   The exit code is not changed, but can be combined with the --zero flag.
 
