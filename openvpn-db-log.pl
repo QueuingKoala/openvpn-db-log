@@ -55,6 +55,8 @@ Status file processing:
       OpenVPN status format version. Must be 2 or 3, and defaults to 3.
   --status-need-success, -N
       Refuse the update if any client entries fail (see docs.)
+  --status-age, -A
+      Maximum allowable age in seconds of the status file timestamp.
 };
         exit 0;
 }
@@ -100,6 +102,7 @@ GetOptions(
 	"status-file|S:s"	=> \$status{file},
 	"status-version|V=i"	=> \$status{version},
 	"status-need-success|N"	=> \$status{need_success},
+	"status-age|A=i"	=> \$status{age},
         "help|usage|h"          => \&usage,
 );
 
@@ -431,6 +434,10 @@ sub status_proc {
 		chomp;
 		# pull out time:
 		if ( /^TIME$delim.*$delim([0-9]+)$/ ) {
+			if ( defined $status{age} ) {
+				( time() - $1 <= $status{age} )
+					or failure("Status file exceeds aging limit");
+			}
 			$o{time_update} = $1;
 		}
 		next unless defined $o{time_update};

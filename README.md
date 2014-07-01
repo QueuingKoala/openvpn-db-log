@@ -150,6 +150,13 @@ be no disconnect event despite a partial database row for the connection.
   output of a `status` command from OpenVPN using the STDIN input support; and
   only then when this is desired behavior.
 
+## Allowable status file age
+
+  The --status-age (-A) flag sets a maximum allowable increase between the
+  status file timestamp and the current system clock, in seconds. If an OpenVPN
+  server has terminated, the status file is often left as-is; this option
+  prevents needless database connections.
+
 Instance support: logging for multiple servers
 ----------------------------------------------
 
