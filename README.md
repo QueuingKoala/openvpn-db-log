@@ -14,6 +14,17 @@ The OpenVPN DB Log project is licensed under the GPLv3 license:
 
 * http://opensource.org/licenses/GPL-3.0
 
+Requirements
+------------
+
+To use this project meaningfully, you will need:
+
+ * OpenVPN, without which this project won't be of much use
+ * Perl installed, and available to execute this project's script
+ * The DBI Perl module, plus the relevant DBD:: module for your database
+ * The SQL server you are connecting to must be configured for access
+ * If this is a new setup, you must load the project schema into the database
+
 Quickstart
 ----------
 
@@ -26,46 +37,37 @@ You'll need to create a new database with the schema. For SQLite, you can do:
     sqlite3 /var/db/vpn.sqlite < ./schema/sqlite.sql
 
 Then add the following 2 lines in your OpenVPN config file to provide a basic
-logging setup, using a database file at /var/db/vpn.sqlite
+logging setup, using the same database (lines wrapped for readability)
 
-    client-connect /usr/local/bin/openvpn-db-log.pl -d /var/db/vpn.sqlite
-    client-disconnect /usr/local/bin/openvpn-db-log.pl -d /var/db/vpn.sqlite
+    client-connect /usr/local/bin/openvpn-db-log.pl -b SQLite
+      -d /var/db/vpn.sqlite
+
+    client-disconnect /usr/local/bin/openvpn-db-log.pl -b SQLite
+      -d /var/db/vpn.sqlite
 
 Additional features for database backends, recording the server program
 instance, and live-client-updates are described in more detail below.
-
-Requirements
-------------
-
-To use this project meaningfully, you will need:
-
- * Perl installed, and available to execute this project's script
- * The DBI Perl module, plus the relevant DBD:: module for your database
- * The SQL server you are connecting to must be configured for access
-    (note: this is "handled for you" with SQLite, which uses files)
- * If this is a new setup, you must load the project schema into the database
- * OpenVPN, without which this project won't be of much use
 
 Databases supported
 -------------------
 
 Multiple databases are supported by available Perl DBD backends as available on
-the local system. SQLite is the default if another backend is not specified;
-this requires nothing more than the DBD:SQLite Perl module for operation.
+the local system. So long as you have the DBD driver available and a schema, the
+code should work with most standard SQL systems.
+
+Most database backends will require a server, database name, and user
+credentials. See the `Database options` help output for the program flags for
+each. If your particular database doesn't require one of these, simply omit the
+option.
 
 If there isn't a schema available for your preferred RDBMS, consider creating
-and contributing one (more info in Hacking.md.)
-
-Besides the file-based SQLite, most database backends will require a server,
-database name, and user credentials. See the `Database options` help output for
-the program flags for each. If your particular database doesn't require one of
-these, simply omit the option.
+and contributing one (more info in docs/Hacking.md.)
 
 ## Database credentials
 
   If your database backend requires credentials, you can supply them either with
   the --user / --pass options, or with a --credentials (-C) file. When used, the
-  first 2 lines of this file will be taken as the user and password.
+  first 2 lines of a credentials file will be taken as the user and password.
 
 Standard features
 -----------------
@@ -204,3 +206,4 @@ incremental SQL upgrade scripts for any schema changes.
 
 If you're not comfortable adjusting database schema between versions as
 necessary, a development branch is probably not for you.
+
