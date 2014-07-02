@@ -17,10 +17,10 @@ sub usage {
 OPTIONS:
 
 Database options:
+  --backend, -b
+      The Perl DBI backend to use. Mandatory.
   --database, --db -d
       The database to connect to.
-  --backend, -b
-      The Perl DBI backend to use. Defaults to "SQLite".
   --host, -H
       Database host to connect to.
   --port, -t
@@ -67,7 +67,6 @@ EOM
 # Database vars:
 my %dsn;
 my %db = (
-	driver	=> "SQLite",
 	user	=> "",
 	pass	=> "",
 );
@@ -111,6 +110,8 @@ GetOptions(
 );
 
 # Verify CLI opts
+defined $db{driver}
+	or failure("Options error: no backend driver provided");
 length($i{name}) <= 64
 	or failure("Options error: instance-name too long (>64)");
 length($i{proto}) <= 10

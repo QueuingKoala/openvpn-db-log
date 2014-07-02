@@ -53,15 +53,20 @@ Databases supported
 
 Multiple databases are supported by available Perl DBD backends as available on
 the local system. So long as you have the DBD driver available and a schema, the
-code should work with most standard SQL systems.
+code should work with most standard SQL systems. Schemas are provided in the
+`schemas/` directory for the following database systems:
+
+ * MySQL (backend name `mysql`)
+ * PostgreSQL (backend name `Pg`)
+ * SQLite (backend name `SQLite`)
+
+If there isn't a schema available for your preferred RDBMS, consider creating
+and contributing one (more info in docs/Hacking.md.)
 
 Most database backends will require a server, database name, and user
 credentials. See the `Database options` help output for the program flags for
 each. If your particular database doesn't require one of these, simply omit the
 option.
-
-If there isn't a schema available for your preferred RDBMS, consider creating
-and contributing one (more info in docs/Hacking.md.)
 
 ## Database credentials
 
