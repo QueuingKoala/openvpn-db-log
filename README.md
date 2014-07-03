@@ -68,7 +68,7 @@ credentials. See the `Database options` help output for the program flags for
 each. If your particular database doesn't require one of these, simply omit the
 option.
 
-## Database credentials
+#### Database credentials
 
   If your database backend requires credentials, you can supply them either with
   the --user / --pass options, or with a --credentials (-C) file. When used, the
@@ -80,7 +80,7 @@ Standard features
 In addition to database connection options, some standard features are
 available.
 
-## Forking: allow user connections if logging fails
+#### Forking: allow user connections if logging fails
 
   Normally, on-connect processing will report a non-zero status if SQL logging
   fails. This will cause OpenVPN to reject the connection when the script is
@@ -95,7 +95,7 @@ available.
   Note that the script may still exit non-zero if a failure occurs before
   reaching the SQL connect stage. Read about the `Zero` feature to avoid this.
 
-## Zero Return: always exit code 0 no matter what
+#### Zero Return: always exit code 0 no matter what
 
   Some implementations may want a 0 exit code in the face of fatal problems,
   such as missing env-vars or bogus command options.
@@ -103,7 +103,7 @@ available.
   For this, enable the --zero (-z) flag. Error messages are still printed to
   standard error.
 
-## Quiet: do not print error text
+#### Quiet: do not print error text
 
   To disable printing of error messages, pass the --quiet (-q) flag.
 
@@ -141,14 +141,14 @@ This is especially useful in environments where long-lived connections are
 common. When an OpenVPN server is terminated (or the app/OS crashes) there will
 be no disconnect event despite a partial database row for the connection.
 
-## Status file requirements
+#### Status file requirements
 
   In order to do partial-updates of status files, you must:
     * Enable the `--status-file` OpenVPN directive
     * Set the `--status-version` to version 2 or 3 (v1 is not supported)
     * Enable regular processing of the status file (see below)
 
-## Sending the status file for log processing
+#### Sending the status file for log processing
 
   You will need to set up some regular process by which the program is told to
   parse a status file from OpenVPN; this could be cron, or some other on-demand
@@ -163,7 +163,7 @@ be no disconnect event despite a partial database row for the connection.
   output of a `status` command from OpenVPN using the STDIN input support; and
   only then when this is desired behavior.
 
-## Allowable status file age
+#### Allowable status file age
 
   The --status-age (-A) flag sets a maximum allowable increase between the
   status file timestamp and the current system clock, in seconds. If an OpenVPN
@@ -191,7 +191,7 @@ separate instance. This means that if you log some connections with name=Blue,
 then other connections with name=Blue port=1195, these would be stored
 internally with different instance IDs.
 
-## Changing instance values
+#### Changing instance values
 
   Once an instance association has been added to the database, the unique
   combination appears in the `instances` table. This means updating values is
