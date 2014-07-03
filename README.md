@@ -37,13 +37,11 @@ You'll need to create a new database with the schema. For SQLite, you can do:
     sqlite3 /var/db/vpn.sqlite < ./schema/sqlite.sql
 
 Then add the following 2 lines in your OpenVPN config file to provide a basic
-logging setup, using the same database (lines wrapped for readability)
+logging setup, using the same database:
 
-    client-connect /usr/local/bin/openvpn-db-log.pl -b SQLite
-      -d /var/db/vpn.sqlite
+    client-connect /path/to/openvpn-db-log.pl -b SQLite -d /var/db/vpn.sqlite
 
-    client-disconnect /usr/local/bin/openvpn-db-log.pl -b SQLite
-      -d /var/db/vpn.sqlite
+    client-disconnect /path/to/openvpn-db-log.pl -b SQLite -d /var/db/vpn.sqlite
 
 Additional features for database backends, recording the server program
 instance, and live-client-updates are described in more detail below.
