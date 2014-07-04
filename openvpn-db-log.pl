@@ -124,16 +124,15 @@ read_creds() if defined $db{creds};
 # Status file processing won't continue below
 status_proc() if defined $status{file};
 
-# Define env-vars to check, and shorter reference option names.
+# Define required env-vars, keyed by shorter reference names.
 # Disconnect/update will add to this hash later if needed
 my %o = (
-	time		=> 'time_unix',
 	src_port	=> 'trusted_port',
 	vpn_ip4		=> 'ifconfig_pool_remote_ip',
 	cn		=> 'common_name',
 );
 
-# Set var requirements and sub handler depending on script_type
+# Append to mandatory env-vars and set sub handler depending on script_type
 my $type;
 $type = $ENV{script_type}
 	or failure("Missing required script_type env-var");
@@ -141,23 +140,27 @@ my $handler = \&connect;
 if ( $type =~ /^client-disconnect$/ ) {
 	$handler = \&disconnect;
 	# add some additional vars used during disconnect
-	%o = (
-		%o,
+	%o = (	%o,
+		time		=> 'time_unix',
 		duration	=> 'time_duration',
 		bytes_in	=> 'bytes_received',
 		bytes_out	=> 'bytes_sent',
 	);
 }
+elsif ( $type =~ /^client-connect$/ ) {
+	%o = (	%o,
+		time	=> 'time_unix',
+	);
+}
 elsif ( $type =~ /^db-update$/) {
 	$handler = \&update;
 	# vars required for updates:
-	%o = (
-		%o,
+	%o = (	%o,
 		bytes_in	=> 'bytes_received',
 		bytes_out	=> 'bytes_sent',
 	);
 }
-elsif ( $type !~ /^client-connect$/ ) {
+else {
 	failure("Invalid script_type: '$type'");
 }
 
