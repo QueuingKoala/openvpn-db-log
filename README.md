@@ -200,6 +200,26 @@ internally with different instance IDs.
   information is stored in the `instances` table alone, and referenced as an ID
   from the `sessions` table.
 
+Partial-update API
+------------------
+
+Most uses of the partial-update feature will likely want to use the status
+processing feature described above. For advanced needs, a basic API is provided
+to do partial-update processing. Limited error checking is done, since the
+values are normally supplied from OpenVPN anyway.
+
+To use, declare the following env-vars for the call to openvpn-db-log.pl:
+  * `trusted_port`
+  * `ifconfig_pool_remote_ip`
+  * `common_name`
+  * `bytes_received`
+  * `bytes_sent`
+  * `script_type` (must be set to the string: "db-update")
+  * `time_unix` (optional, the system time will be used when omitted)
+
+Note that any program CLI options for DB or other program features must still be
+supplied as described earlier.
+
 Versions and schema stability
 -----------------------------
 
