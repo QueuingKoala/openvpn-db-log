@@ -166,16 +166,15 @@ else {
 
 # Verify and set env-var values
 # In each case, the actual value is assigned to %o.
-my $var;
 for my $key (keys %o) {
-	$var = $o{$key};
+	my $var = $o{$key};
 	defined $ENV{$var}
 		or failure("ERR: missing env-var: $var");
 	$o{$key} = $ENV{$var};
 }
 
 # Need either trusted_ip or trusted_ip6 from env:
-for $var (qw(trusted_ip trusted_ip6)) {
+for my $var (qw(trusted_ip trusted_ip6)) {
 	defined $ENV{$var}
 		and $o{src_ip} = $ENV{$var};
 }
