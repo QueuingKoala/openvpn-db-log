@@ -70,7 +70,7 @@ my %db = (
 	user	=> "",
 	pass	=> "",
 );
-# Common config vars:
+# Common "global" config vars:
 my %g = (
 	fork	=> 0,
 	quiet	=> 0,
