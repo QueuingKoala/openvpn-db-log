@@ -106,7 +106,7 @@ GetOptions(
 	"status-version|V=i"	=> \$status{version},
 	"status-need-success|N"	=> \$status{need_success},
 	"status-age|A=i"	=> \$status{age},
-        "help|usage|h"          => \&usage,
+	"help|usage|h"          => \&usage,
 );
 
 # Verify CLI opts
