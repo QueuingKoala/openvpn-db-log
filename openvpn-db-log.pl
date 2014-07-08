@@ -308,7 +308,7 @@ sub disconnect {
 sub update {
 	my %f_opt = ( @_ );
 	my $iid = $f_opt{iid} || get_instance();
-	my $update_time = $o{time_update} || time();
+	my $update_time = $f_opt{time_update} || time();
 
 	my $id = match_session_id( iid => $iid );
 
@@ -392,16 +392,26 @@ sub add_instance {
 # Associate with the connect session using env-vars:
 sub match_session_id {
 	my %f_opt = ( @_ );
+	my @query_opts;
+	my $vpn_ip_query = "= ?";
+	my $sth_name = "sth_session";
+	if (not defined $o{vpn_ip4} or length($o{vpn_ip4}) == 0) {
+		$vpn_ip_query = "IS NULL";
+		$sth_name .= "_null";
+	}
+	else {
+		push @query_opts, $o{vpn_ip4};
+	}
 	# Prepare session query, unless we have one
-	defined $g{sth_session} or $g{sth_session} = $g{dbh}->prepare(qq{
+	defined $g{$sth_name} or $g{$sth_name} = $g{dbh}->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
 			disconnect_time IS NULL
+		  AND	vpn_ip4 $vpn_ip_query
 		  AND	connect_time = ?
 		  AND	src_ip = ?
 		  AND	src_port = ?
-		  AND	vpn_ip4 = ?
 		  AND	cn = ?
 		  AND	instance_id = ?
 		ORDER BY
@@ -410,15 +420,16 @@ sub match_session_id {
 	});
 
 	# Then run the query on the client option data
-	$g{sth_session}->execute(
+	push @query_opts, (
 		$o{time},
 		$o{src_ip},
 		$o{src_port},
-		$o{vpn_ip4},
 		$o{cn},
 		$f_opt{iid},
 	);
-	my $id = $g{sth_session}->fetchrow_array
+	$g{$sth_name}->execute(@query_opts);
+
+	my $id = $g{$sth_name}->fetchrow_array
 		or die "No matching connection entry found";
 	return $id;
 }
@@ -444,6 +455,7 @@ sub status_proc {
 
 	my @fields;
 	my $iid;
+	my $time_update;
 	my $bad_lines = 0;
 	while (<$input>) {
 		chomp;
@@ -453,12 +465,13 @@ sub status_proc {
 				( time() - $1 <= $status{age} )
 					or failure("Status file exceeds aging limit");
 			}
-			$o{time_update} = $1;
+			$time_update = $1;
 		}
-		next unless defined $o{time_update};
+		next unless defined $time_update;
 
 		# Otherwise process client list lines.
 		next unless /^CLIENT_LIST($delim.*){8}/;
+		%o = ();
 		@fields = split /$delim/;
 		shift @fields;
 
@@ -491,7 +504,7 @@ sub status_proc {
 
 		# Now perform the update, which uses values assigned to %o:
 		eval {
-			update( iid => $iid );
+			update( iid => $iid, time_update => $time_update );
 		};
 		# Error handling:
 		# Only do a rollback when 100% success is required:
