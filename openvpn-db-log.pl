@@ -126,11 +126,10 @@ status_proc() if defined $status{file};
 
 # Define required env-vars, keyed by shorter reference names.
 # Disconnect/update will add to this hash later if needed
-my %o = (
-	src_port	=> 'trusted_port',
-	vpn_ip4		=> 'ifconfig_pool_remote_ip',
-	cn		=> 'common_name',
-);
+my %o;
+env_opt(src_port	=> 'trusted_port');
+env_opt(cn		=> 'common_name');
+env_opt(vpn_ip4		=> 'ifconfig_pool_remote_ip', "");
 
 # Append to mandatory env-vars and set sub handler depending on script_type
 my $type;
@@ -140,45 +139,26 @@ my $handler = \&connect;
 if ( $type =~ /^client-disconnect$/ ) {
 	$handler = \&disconnect;
 	# add some additional vars used during disconnect
-	%o = (	%o,
-		time		=> 'time_unix',
-		duration	=> 'time_duration',
-		bytes_in	=> 'bytes_received',
-		bytes_out	=> 'bytes_sent',
-	);
+	env_opt(time		=> 'time_unix');
+	env_opt(duration	=> 'time_duration');
+	env_opt(bytes_in	=> 'bytes_received');
+	env_opt(bytes_out	=> 'bytes_sent');
 }
 elsif ( $type =~ /^client-connect$/ ) {
-	%o = (	%o,
-		time	=> 'time_unix',
-	);
+	env_opt(time		=> 'time_unix');
 }
 elsif ( $type =~ /^db-update$/) {
 	$handler = \&update;
 	# vars required for updates:
-	%o = (	%o,
-		bytes_in	=> 'bytes_received',
-		bytes_out	=> 'bytes_sent',
-	);
+	env_opt(bytes_in	=> 'bytes_received');
+	env_opt(bytes_out	=> 'bytes_sent');
 }
 else {
 	failure("Invalid script_type: '$type'");
 }
 
-# Verify and set env-var values
-# In each case, the actual value is assigned to %o.
-for my $key (keys %o) {
-	my $var = $o{$key};
-	defined $ENV{$var}
-		or failure("ERR: missing env-var: $var");
-	$o{$key} = $ENV{$var};
-}
-
 # Need either trusted_ip or trusted_ip6 from env:
-for my $var (qw(trusted_ip trusted_ip6)) {
-	defined $ENV{$var}
-		and $o{src_ip} = $ENV{$var};
-}
-defined $o{src_ip}
+$o{src_ip} = $ENV{trusted_ip} || $ENV{trusted_ip6}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
@@ -206,6 +186,16 @@ sub failure {
 	exit 0 if $g{rc_zero};
 	exit 100;
 };
+
+# Env-var option helper
+# Call as: env_opt( 'opt_name', 'env_var' [, 'default-when-optional']
+sub env_opt {
+	my ($opt, $env, $default) = @_;
+	return if ( $o{$opt} = $ENV{$env} );
+	defined $default
+		or failure("Error: missing env-var: $env");
+	$o{opt} = $default;
+}
 
 # Credentials processing
 sub read_creds {
