@@ -126,11 +126,10 @@ status_proc() if defined $status{file};
 
 # Define required env-vars, keyed by shorter reference names.
 # Disconnect/update will add to this hash later if needed
-my %o = (
-	src_port	=> 'trusted_port',
-	vpn_ip4		=> 'ifconfig_pool_remote_ip',
-	cn		=> 'common_name',
-);
+my %o;
+env_opt(src_port	=> 'trusted_port');
+env_opt(cn		=> 'common_name');
+env_opt(vpn_ip4		=> 'ifconfig_pool_remote_ip', "");
 
 # Append to mandatory env-vars and set sub handler depending on script_type
 my $type;
@@ -140,45 +139,26 @@ my $handler = \&connect;
 if ( $type =~ /^client-disconnect$/ ) {
 	$handler = \&disconnect;
 	# add some additional vars used during disconnect
-	%o = (	%o,
-		time		=> 'time_unix',
-		duration	=> 'time_duration',
-		bytes_in	=> 'bytes_received',
-		bytes_out	=> 'bytes_sent',
-	);
+	env_opt(time		=> 'time_unix');
+	env_opt(duration	=> 'time_duration');
+	env_opt(bytes_in	=> 'bytes_received');
+	env_opt(bytes_out	=> 'bytes_sent');
 }
 elsif ( $type =~ /^client-connect$/ ) {
-	%o = (	%o,
-		time	=> 'time_unix',
-	);
+	env_opt(time		=> 'time_unix');
 }
 elsif ( $type =~ /^db-update$/) {
 	$handler = \&update;
 	# vars required for updates:
-	%o = (	%o,
-		bytes_in	=> 'bytes_received',
-		bytes_out	=> 'bytes_sent',
-	);
+	env_opt(bytes_in	=> 'bytes_received');
+	env_opt(bytes_out	=> 'bytes_sent');
 }
 else {
 	failure("Invalid script_type: '$type'");
 }
 
-# Verify and set env-var values
-# In each case, the actual value is assigned to %o.
-for my $key (keys %o) {
-	my $var = $o{$key};
-	defined $ENV{$var}
-		or failure("ERR: missing env-var: $var");
-	$o{$key} = $ENV{$var};
-}
-
 # Need either trusted_ip or trusted_ip6 from env:
-for my $var (qw(trusted_ip trusted_ip6)) {
-	defined $ENV{$var}
-		and $o{src_ip} = $ENV{$var};
-}
-defined $o{src_ip}
+$o{src_ip} = $ENV{trusted_ip} || $ENV{trusted_ip6}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
@@ -206,6 +186,16 @@ sub failure {
 	exit 0 if $g{rc_zero};
 	exit 100;
 };
+
+# Env-var option helper
+# Call as: env_opt( 'opt_name', 'env_var' [, 'default-when-optional']
+sub env_opt {
+	my ($opt, $env, $default) = @_;
+	return if ( $o{$opt} = $ENV{$env} );
+	defined $default
+		or failure("Error: missing env-var: $env");
+	$o{opt} = $default;
+}
 
 # Credentials processing
 sub read_creds {
@@ -318,7 +308,7 @@ sub disconnect {
 sub update {
 	my %f_opt = ( @_ );
 	my $iid = $f_opt{iid} || get_instance();
-	my $update_time = $o{time_update} || time();
+	my $update_time = $f_opt{time_update} || time();
 
 	my $id = match_session_id( iid => $iid );
 
@@ -402,16 +392,26 @@ sub add_instance {
 # Associate with the connect session using env-vars:
 sub match_session_id {
 	my %f_opt = ( @_ );
+	my @query_opts;
+	my $vpn_ip_query = "= ?";
+	my $sth_name = "sth_session";
+	if (not defined $o{vpn_ip4} or length($o{vpn_ip4}) == 0) {
+		$vpn_ip_query = "IS NULL";
+		$sth_name .= "_null";
+	}
+	else {
+		push @query_opts, $o{vpn_ip4};
+	}
 	# Prepare session query, unless we have one
-	defined $g{sth_session} or $g{sth_session} = $g{dbh}->prepare(qq{
+	defined $g{$sth_name} or $g{$sth_name} = $g{dbh}->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
 			disconnect_time IS NULL
+		  AND	vpn_ip4 $vpn_ip_query
 		  AND	connect_time = ?
 		  AND	src_ip = ?
 		  AND	src_port = ?
-		  AND	vpn_ip4 = ?
 		  AND	cn = ?
 		  AND	instance_id = ?
 		ORDER BY
@@ -420,15 +420,16 @@ sub match_session_id {
 	});
 
 	# Then run the query on the client option data
-	$g{sth_session}->execute(
+	push @query_opts, (
 		$o{time},
 		$o{src_ip},
 		$o{src_port},
-		$o{vpn_ip4},
 		$o{cn},
 		$f_opt{iid},
 	);
-	my $id = $g{sth_session}->fetchrow_array
+	$g{$sth_name}->execute(@query_opts);
+
+	my $id = $g{$sth_name}->fetchrow_array
 		or die "No matching connection entry found";
 	return $id;
 }
@@ -454,6 +455,7 @@ sub status_proc {
 
 	my @fields;
 	my $iid;
+	my $time_update;
 	my $bad_lines = 0;
 	while (<$input>) {
 		chomp;
@@ -463,12 +465,13 @@ sub status_proc {
 				( time() - $1 <= $status{age} )
 					or failure("Status file exceeds aging limit");
 			}
-			$o{time_update} = $1;
+			$time_update = $1;
 		}
-		next unless defined $o{time_update};
+		next unless defined $time_update;
 
 		# Otherwise process client list lines.
 		next unless /^CLIENT_LIST($delim.*){8}/;
+		%o = ();
 		@fields = split /$delim/;
 		shift @fields;
 
@@ -501,7 +504,7 @@ sub status_proc {
 
 		# Now perform the update, which uses values assigned to %o:
 		eval {
-			update( iid => $iid );
+			update( iid => $iid, time_update => $time_update );
 		};
 		# Error handling:
 		# Only do a rollback when 100% success is required:
