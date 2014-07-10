@@ -201,16 +201,9 @@ sub env_opt {
 sub read_creds {
 	open(my $fh, "<", $db{creds})
 		or failure("Unable to open credentials file");
-	my ($user, $pass);
-	while (<$fh>) {
-		chomp($pass = $_) if ($user);
-		chomp($user = $_) unless defined $user;
-		last if $. == 2;
-	}
-	close($fh);
-	defined $pass or failure("Invalid credentials file");
-	$db{user} = $user;
-	$db{pass} = $pass;
+	($db{user}, $db{pass}) = grep( defined, map(<$fh>, 1..2) );
+	defined $db{pass} or failure("Invalid credentials file");
+	chomp %db;
 }
 
 # Fork handler; closes standard file handles
