@@ -198,7 +198,7 @@ sub env_opt {
 	return if ( $o{$opt} = $ENV{$env} );
 	defined $default
 		or failure("Error: missing env-var: $env");
-	$o{opt} = $default;
+	$o{$opt} = $default;
 }
 
 # Credentials processing
