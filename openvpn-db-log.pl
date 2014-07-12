@@ -72,14 +72,14 @@ my %db = (
 	user	=> "",
 	pass	=> "",
 );
-# Common "global" config vars:
-my %g = (
+# Common config vars:
+my %conf = (
 	fork	=> 0,
 	quiet	=> 0,
 	rc_zero	=> 0,
 );
 # Instance vars:
-my %i = (
+my %instance = (
 	name	=> '',
 	proto	=> '',
 	port	=> 0,
@@ -91,9 +91,9 @@ my %status = (
 	verb		=> 0,
 );
 GetOptions(
-	"fork|f!"		=> \$g{fork},
-	"quiet|q!"		=> \$g{quiet},
-	"zero|z!"		=> \$g{rc_zero},
+	"fork|f!"		=> \$conf{fork},
+	"quiet|q!"		=> \$conf{quiet},
+	"zero|z!"		=> \$conf{rc_zero},
 	"backend|b=s"		=> \$db{driver},
 	"user|u=s"		=> \$db{user},
 	"password|pass|p=s"	=> \$db{pass},
@@ -102,9 +102,9 @@ GetOptions(
 	"host|H=s"		=> \$dsn{host},
 	"port|t=i"		=> \$dsn{port},
 	"dsn=s"			=> \%dsn,
-	"instance-name|n=s"	=> \$i{name},
-	"instance-proto|r=s"	=> \$i{proto},
-	"instance-port|o=i"	=> \$i{port},
+	"instance-name|n=s"	=> \$instance{name},
+	"instance-proto|r=s"	=> \$instance{proto},
+	"instance-port|o=i"	=> \$instance{port},
 	"status-file|S:s"	=> \$status{file},
 	"status-version|V=i"	=> \$status{version},
 	"status-need-success|N"	=> \$status{need_success},
@@ -116,11 +116,11 @@ GetOptions(
 # Verify CLI opts
 defined $db{driver}
 	or failure("Options error: no backend driver provided");
-length($i{name}) <= 64
+length($instance{name}) <= 64
 	or failure("Options error: instance-name too long (>64)");
-length($i{proto}) <= 10
+length($instance{proto}) <= 10
 	or failure("Options error: instance-proto too long (>10)");
-$i{port} >= 0 and $i{port} <= 65535
+$instance{port} >= 0 and $instance{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
 
 read_creds() if defined $db{creds};
@@ -166,7 +166,7 @@ $o{src_ip} = $ENV{trusted_ip} || $ENV{trusted_ip6}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
-db_fork() if ( $g{fork} );
+db_fork() if ( $conf{fork} );
 
 db_connect();
 
@@ -174,7 +174,7 @@ db_connect();
 # Any database errors escape the eval to be handled below.
 eval {
 	$handler->();
-	$g{dbh}->commit();
+	$db{dbh}->commit();
 };
 
 # Handle any DB transaction errors from the handler sub
@@ -186,8 +186,8 @@ exit 0;
 # Exit handler, for message display and return code control
 sub failure {
 	my ($msg) = @_;
-	warn "$msg" if $msg and not $g{quiet};
-	exit 0 if $g{rc_zero};
+	warn "$msg" if $msg and not $conf{quiet};
+	exit 0 if $conf{rc_zero};
 	exit 100;
 };
 
@@ -221,7 +221,7 @@ sub db_fork {
 # Generic DB error handler
 sub db_rollback {
 	my $msg = shift || "";
-	eval { $g{dbh}->rollback; };
+	eval { $db{dbh}->rollback; };
 	failure($msg);
 }
 
@@ -233,7 +233,7 @@ sub db_connect {
 		$driver_dsn .= "$key=$dsn{$key};";
 	}
 	$driver_dsn =~ s/;$//;
-	$g{dbh} = DBI->connect(
+	$db{dbh} = DBI->connect(
 		"dbi:$db{driver}:$driver_dsn",
 		$db{user},
 		$db{pass}, {
@@ -243,15 +243,15 @@ sub db_connect {
 	);
 
 	# Handle DB connect errors
-	defined $g{dbh}
+	defined $db{dbh}
 		or failure("DB connection failed: ($DBI::errstr)");
-	$g{dbh}->{RaiseError} = 1;
+	$db{dbh}->{RaiseError} = 1;
 }
 
 # Insert the connect data
 sub connect {
 	my $iid = get_instance(create => 1);
-	$g{dbh}->do(qq{
+	$db{dbh}->do(qq{
 		INSERT INTO
 		session (
 			connect_time,
@@ -281,7 +281,7 @@ sub disconnect {
 
 	# Update session details with disconnect values:
 	$o{disconnect_time} = $o{time} + $o{duration};
-	$sth = $g{dbh}->do(qq{
+	$sth = $db{dbh}->do(qq{
 		UPDATE
 			session
 		SET
@@ -314,7 +314,7 @@ sub update {
 	$o{duration} >= 0 or die "Failed update: time has gone backwards";
 
 	# Prepare update query, unless we have one
-	defined $g{sth_update} or $g{sth_update} = $g{dbh}->prepare(qq{
+	defined $db{sth_update} or $db{sth_update} = $db{dbh}->prepare(qq{
 		UPDATE
 			session
 		SET
@@ -326,7 +326,7 @@ sub update {
 	});
 
 	# Update session details with supplied values:
-	$g{sth_update}->execute(
+	$db{sth_update}->execute(
 		$o{duration},
 		$o{bytes_in},
 		$o{bytes_out},
@@ -341,7 +341,7 @@ sub get_instance {
 		create	=> 0,
 		@_
 	);
-	my $sth = $g{dbh}->prepare(qq{
+	my $sth = $db{dbh}->prepare(qq{
 		SELECT	id
 		FROM	instance
 		WHERE
@@ -353,9 +353,9 @@ sub get_instance {
 		LIMIT	1
 	});
 	$sth->execute(
-		$i{name},
-		$i{port},
-		$i{proto},
+		$instance{name},
+		$instance{port},
+		$instance{proto},
 	);
 	my $id = $sth->fetchrow_array;
 
@@ -368,7 +368,7 @@ sub get_instance {
 }
 
 sub add_instance {
-	$g{dbh}->do(qq{
+	$db{dbh}->do(qq{
 		INSERT INTO
 		instance (
 			name,
@@ -378,9 +378,9 @@ sub add_instance {
 		values (?, ?, ?)
 		},
 		undef,
-		$i{name},
-		$i{port},
-		$i{proto},
+		$instance{name},
+		$instance{port},
+		$instance{proto},
 
 	);
 	return get_instance();
@@ -400,7 +400,7 @@ sub match_session_id {
 		push @query_opts, $o{vpn_ip4};
 	}
 	# Prepare session query, unless we have one
-	defined $g{$sth_name} or $g{$sth_name} = $g{dbh}->prepare(qq{
+	defined $db{$sth_name} or $db{$sth_name} = $db{dbh}->prepare(qq{
 		SELECT	id
 		FROM	session
 		WHERE
@@ -424,9 +424,9 @@ sub match_session_id {
 		$o{cn},
 		$f_opt{iid},
 	);
-	$g{$sth_name}->execute(@query_opts);
+	$db{$sth_name}->execute(@query_opts);
 
-	my $id = $g{$sth_name}->fetchrow_array
+	my $id = $db{$sth_name}->fetchrow_array
 		or die "No matching connection entry found";
 	return $id;
 }
@@ -448,7 +448,7 @@ sub status_proc {
 			or failure("Failed to open STDIN for status reading");
 	}
 
-	db_fork() if ( $g{fork} );
+	db_fork() if ( $conf{fork} );
 
 	my @fields;
 	my $iid;
@@ -493,7 +493,7 @@ sub status_proc {
 		}
 
 		# Do any delayed DB setup tasks now that we have a real line:
-		if ( ! defined $g{dbh} ) {
+		if ( ! defined $db{dbh} ) {
 			eval {
 				db_connect();
 				$iid = get_instance();
@@ -518,12 +518,12 @@ sub status_proc {
 
 	# Final DB commit if anything happened:
 	eval {
-		$g{dbh}->commit() if defined $g{dbh};
+		$db{dbh}->commit() if defined $db{dbh};
 	};
 	# Error handling:
 	db_rollback($@) if ($@);
 
-	exit 0 if $g{rc_zero};
+	exit 0 if $conf{rc_zero};
 	$bad_lines = 99 if ($bad_lines > 99);
 	exit $bad_lines;
 }
