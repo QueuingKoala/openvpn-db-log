@@ -143,9 +143,9 @@ be no disconnect event despite a partial database row for the connection.
 
   In order to do partial-updates of status files, you must:
 
-    * Enable the `--status-file` OpenVPN directive
-    * Set the `--status-version` to version 2 or 3 (v1 is not supported)
-    * Enable regular processing of the status file (see below)
+  * Enable the `--status-file` OpenVPN directive
+  * Set the `--status-version` to version 2 or 3 (v1 is not supported)
+  * Enable regular processing of the status file (see below)
 
 #### Sending the status file for log processing
 
