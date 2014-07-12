@@ -60,6 +60,8 @@ Status file processing:
       Refuse the update if any client entries fail (see docs.)
   --status-age, -A
       Maximum allowable age in seconds of the status file timestamp.
+  --status-info, -I
+      Print extra info to STDERR for ignored client lines (see docs.)
 EOM
         exit 0;
 }
@@ -86,6 +88,7 @@ my %i = (
 my %status = (
 	need_success	=> 0,
 	version		=> 3,
+	verb		=> 0,
 );
 GetOptions(
 	"fork|f!"		=> \$g{fork},
@@ -106,6 +109,7 @@ GetOptions(
 	"status-version|V=i"	=> \$status{version},
 	"status-need-success|N"	=> \$status{need_success},
 	"status-age|A=i"	=> \$status{age},
+	"status-info|I+"	=> \$status{verb},
 	"help|usage|h"          => \&usage,
 );
 
@@ -482,6 +486,8 @@ sub status_proc {
 			$o{src_port} = $2;
 		}
 		else {
+			warn "bad IP/port in input" if ( $status{verb} >= 1 );
+			warn " bad line: $_" if ( $status{verb} >= 2 );
 			$bad_lines += 1;
 			next;
 		}
@@ -503,7 +509,11 @@ sub status_proc {
 		# Only do a rollback when 100% success is required:
 		db_rollback($@) if ($@) and ($status{need_success});
 		# Otherwise just count the failure:
-		$bad_lines += 1 if ($@);
+		if ($@) {
+			warn "bad input: $@" if ( $status{verb} >= 1 );
+			warn " bad line: $_" if ( $status{verb} >= 2 );
+			$bad_lines += 1 if ($@);
+		}
 	}
 
 	# Final DB commit if anything happened:

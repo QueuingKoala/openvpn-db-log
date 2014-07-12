@@ -168,6 +168,18 @@ be no disconnect event despite a partial database row for the connection.
   server has terminated, the status file is often left as-is; this option
   prevents needless database connections.
 
+#### Increasing status file verbosity
+
+  Additional informational messages for status-file updates can be printed to
+  STDERR when the -N option is not used.
+
+  Passing the --status-info (-I) option 1 or more times enables this feature.
+  This option takes no arguments. The verbosity levels are:
+
+  1. Invalid --status-file lines show the reason for rejection
+  2. Like #1, but also print the full rejected line
+
+
 Instance support: logging for multiple servers
 ----------------------------------------------
 
