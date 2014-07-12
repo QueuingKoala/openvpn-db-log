@@ -506,9 +506,9 @@ sub status_proc {
 		$bad_lines += 1 if ($@);
 	}
 
-	# Final DB commit:
+	# Final DB commit if anything happened:
 	eval {
-		$g{dbh}->commit();
+		$g{dbh}->commit() if defined $g{dbh};
 	};
 	# Error handling:
 	db_rollback($@) if ($@);
