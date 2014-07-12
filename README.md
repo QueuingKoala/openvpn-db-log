@@ -142,6 +142,7 @@ be no disconnect event despite a partial database row for the connection.
 #### Status file requirements
 
   In order to do partial-updates of status files, you must:
+
     * Enable the `--status-file` OpenVPN directive
     * Set the `--status-version` to version 2 or 3 (v1 is not supported)
     * Enable regular processing of the status file (see below)
@@ -221,6 +222,7 @@ to do partial-update processing. Limited error checking is done, since the
 values are normally supplied from OpenVPN anyway.
 
 To use, declare the following env-vars for the call to openvpn-db-log.pl:
+
   * `trusted_port`
   * `ifconfig_pool_remote_ip`
   * `common_name`
