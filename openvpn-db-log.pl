@@ -130,7 +130,7 @@ status_proc() if defined $status{file};
 
 # Define required env-vars, keyed by shorter reference names.
 # Disconnect/update will add to this hash later if needed
-my %o;
+my %data;
 env_opt(src_port	=> 'trusted_port');
 env_opt(cn		=> 'common_name');
 env_opt(vpn_ip4		=> 'ifconfig_pool_remote_ip', "");
@@ -162,7 +162,7 @@ else {
 }
 
 # Need either trusted_ip or trusted_ip6 from env:
-$o{src_ip} = $ENV{trusted_ip} || $ENV{trusted_ip6}
+$data{src_ip} = $ENV{trusted_ip} || $ENV{trusted_ip6}
 	or failure("ERR: missing env-var: trusted_ip");
 
 # When forking, exit success and continue SQL tasks as the child process
@@ -195,10 +195,10 @@ sub failure {
 # Call as: env_opt( 'opt_name', 'env_var' [, 'default-when-optional']
 sub env_opt {
 	my ($opt, $env, $default) = @_;
-	return if ( $o{$opt} = $ENV{$env} );
+	return if ( $data{$opt} = $ENV{$env} );
 	defined $default
 		or failure("Error: missing env-var: $env");
-	$o{$opt} = $default;
+	$data{$opt} = $default;
 }
 
 # Credentials processing
@@ -264,11 +264,11 @@ sub connect {
 		VALUES (?, ?, ?, ?, ?, ?)
 		},
 		undef,
-		$o{time},
-		$o{src_ip},
-		$o{src_port},
-		$o{vpn_ip4},
-		$o{cn},
+		$data{time},
+		$data{src_ip},
+		$data{src_port},
+		$data{vpn_ip4},
+		$data{cn},
 		$iid,
 	);
 }
@@ -280,7 +280,7 @@ sub disconnect {
 	my $id = match_session_id(iid => $iid);
 
 	# Update session details with disconnect values:
-	$o{disconnect_time} = $o{time} + $o{duration};
+	$data{disconnect_time} = $data{time} + $data{duration};
 	$sth = $db{dbh}->do(qq{
 		UPDATE
 			session
@@ -293,10 +293,10 @@ sub disconnect {
 			id = ?
 		},
 		undef,
-		$o{disconnect_time},
-		$o{duration},
-		$o{bytes_in},
-		$o{bytes_out},
+		$data{disconnect_time},
+		$data{duration},
+		$data{bytes_in},
+		$data{bytes_out},
 		$id,
 	);
 }
@@ -310,8 +310,8 @@ sub update {
 	my $id = match_session_id( iid => $iid );
 
 	# Calculate current duration, and basic sanity check:
-	$o{duration} = $update_time - $o{time};
-	$o{duration} >= 0 or die "Failed update: time has gone backwards";
+	$data{duration} = $update_time - $data{time};
+	$data{duration} >= 0 or die "Failed update: time has gone backwards";
 
 	# Prepare update query, unless we have one
 	defined $db{sth_update} or $db{sth_update} = $db{dbh}->prepare(qq{
@@ -327,9 +327,9 @@ sub update {
 
 	# Update session details with supplied values:
 	$db{sth_update}->execute(
-		$o{duration},
-		$o{bytes_in},
-		$o{bytes_out},
+		$data{duration},
+		$data{bytes_in},
+		$data{bytes_out},
 		$id,
 	);
 }
@@ -392,12 +392,12 @@ sub match_session_id {
 	my @query_opts;
 	my $vpn_ip_query = "= ?";
 	my $sth_name = "sth_session";
-	if (not defined $o{vpn_ip4} or length($o{vpn_ip4}) == 0) {
+	if (not defined $data{vpn_ip4} or length($data{vpn_ip4}) == 0) {
 		$vpn_ip_query = "IS NULL";
 		$sth_name .= "_null";
 	}
 	else {
-		push @query_opts, $o{vpn_ip4};
+		push @query_opts, $data{vpn_ip4};
 	}
 	# Prepare session query, unless we have one
 	defined $db{$sth_name} or $db{$sth_name} = $db{dbh}->prepare(qq{
@@ -418,10 +418,10 @@ sub match_session_id {
 
 	# Then run the query on the client option data
 	push @query_opts, (
-		$o{time},
-		$o{src_ip},
-		$o{src_port},
-		$o{cn},
+		$data{time},
+		$data{src_ip},
+		$data{src_port},
+		$data{cn},
 		$f_opt{iid},
 	);
 	$db{$sth_name}->execute(@query_opts);
@@ -474,16 +474,16 @@ sub status_proc {
 
 		# CN can have a comma, so process records from the right until then.
 		for my $key (qw(user time junk bytes_out bytes_in vpn_ip4 remote)) {
-			$o{$key} = pop @fields;
+			$data{$key} = pop @fields;
 		}
 
 		# Remainder is the CN:
-		$o{cn} = join('', @fields);
+		$data{cn} = join('', @fields);
 
 		# pull source IP/port:
-		if ( $o{remote} =~ /^(.+):([0-9]+)$/ ) {
-			$o{src_ip} = $1;
-			$o{src_port} = $2;
+		if ( $data{remote} =~ /^(.+):([0-9]+)$/ ) {
+			$data{src_ip} = $1;
+			$data{src_port} = $2;
 		}
 		else {
 			warn "bad IP/port in input" if ( $status{verb} >= 1 );
