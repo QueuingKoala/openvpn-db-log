@@ -29,7 +29,7 @@ Database options:
       Database username.
   --password, pass, -p
       Database password.
-  --credentials, --cred, -C
+  --credentials, --cred, -c
       File for database authentication, user/pass on first 2 lines.
   --dsn
       An advanced method to define DB DSN options in the form: opt=value
@@ -62,6 +62,8 @@ Status file processing:
       Maximum allowable age in seconds of the status file timestamp.
   --status-info, -I
       Print extra info to STDERR for ignored client lines (see docs.)
+  --update-create, -C
+      During updates, add the session/instance if there is no matching entry.
 EOM
         exit 0;
 }
@@ -91,6 +93,7 @@ my %status = (
 	need_success	=> 0,
 	version		=> 3,
 	verb		=> 0,
+	create		=> 0,
 );
 GetOptions(
 	"fork|f!"		=> \$conf{fork},
@@ -99,7 +102,7 @@ GetOptions(
 	"backend|b=s"		=> \$db{driver},
 	"user|u=s"		=> \$db{user},
 	"password|pass|p=s"	=> \$db{pass},
-	"credentials|creds|C=s"	=> \$db{creds},
+	"credentials|creds|c=s"	=> \$db{creds},
 	"database|db|d=s"	=> \$dsn{database},
 	"host|H=s"		=> \$dsn{host},
 	"port|t=i"		=> \$dsn{port},
@@ -112,6 +115,7 @@ GetOptions(
 	"status-need-success|N"	=> \$status{need_success},
 	"status-age|A=i"	=> \$status{age},
 	"status-info|I+"	=> \$status{verb},
+	"update-create|C"	=> \$status{create},
 	"help|usage|h"          => \&usage,
 );
 
@@ -305,10 +309,10 @@ sub disconnect {
 # Update a session
 sub update {
 	my %f_opt = ( @_ );
-	my $iid = $f_opt{iid} || get_instance();
+	my $iid = $f_opt{iid} || get_instance(create => $status{create});
 	my $update_time = $f_opt{time_update} || time();
 
-	my $id = match_session_id( iid => $iid );
+	my $id = match_session_id( iid => $iid, create => $status{create} );
 
 	# Calculate current duration, and basic sanity check:
 	$data{duration} = $update_time - $data{time};
@@ -388,9 +392,16 @@ sub add_instance {
 }
 
 # Associate with the connect session using env-vars:
+# Must define `iid => <value>`
+# Optionally set `create => 1` to call create() for a missing session entry
 sub match_session_id {
-	my %f_opt = ( @_ );
+	my %f_opt = (
+		create	=> 0,
+		@_
+	);
 	my @query_opts;
+
+	# vpn_ip4 is optional, so set up the query to support both cases:
 	my $vpn_ip_query = "= ?";
 	my $sth_name = "sth_session";
 	if (not defined $data{vpn_ip4} or length($data{vpn_ip4}) == 0) {
@@ -400,13 +411,13 @@ sub match_session_id {
 	else {
 		push @query_opts, $data{vpn_ip4};
 	}
+
 	# Prepare session query, unless we have one
 	defined $db{$sth_name} or $db{$sth_name} = $db{dbh}->prepare(qq{
-		SELECT	id
+		SELECT	id, disconnect_time
 		FROM	session
 		WHERE
-			disconnect_time IS NULL
-		  AND	vpn_ip4 $vpn_ip_query
+			vpn_ip4 $vpn_ip_query
 		  AND	connect_time = ?
 		  AND	src_ip = ?
 		  AND	src_port = ?
@@ -427,8 +438,16 @@ sub match_session_id {
 	);
 	$db{$sth_name}->execute(@query_opts);
 
-	my $id = $db{$sth_name}->fetchrow_array
-		or die "No matching connection entry found";
+	# Look for a matching session:
+	my ($id, $disconnect) = $db{$sth_name}->fetchrow_array();
+	defined $disconnect and die "Cannot update a session that has disconnected";
+	# If there was no match, see if it needs to be created:
+	if ( not defined $id ) {
+		($f_opt{create}) or die "No matching connection entry found";
+		&connect;
+		$id = match_session_id( @_, create => 0 );
+	}
+
 	return $id;
 }
 

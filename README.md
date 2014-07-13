@@ -69,7 +69,7 @@ option.
 #### Database credentials
 
   If your database backend requires credentials, you can supply them either with
-  the --user / --pass options, or with a --credentials (-C) file. When used, the
+  the --user / --pass options, or with a --credentials (-c) file. When used, the
   first 2 lines of a credentials file will be taken as the user and password.
 
 Standard features
@@ -156,6 +156,11 @@ be no disconnect event despite a partial database row for the connection.
   The --status-file (-S) flag is the file path and the --status-version (-V)
   flag must match the OpenVPN setting by the same name (v3 is the default.)
 
+  The --update-create (-C) flag allows a missing session entry to be created
+  instead of failing that entry. This situation could occur if a prior
+  client-connect event failed (due to DB error or network issues.) This feature
+  enables the session to be added at the time of update.
+
   As an advanced feature, the -N flag mandates that every client line must be
   successfully matched and added to the database in order for the transaction to
   go through.  This is probably only useful for people processing the real-time
@@ -235,6 +240,9 @@ To use, declare the following env-vars for the call to openvpn-db-log.pl:
 
 Note that any program CLI options for DB or other program features must still be
 supplied as described earlier.
+
+The `--update-create` feature can be used with this API as well (see `Processing
+status files` for details.)
 
 Versions and schema stability
 -----------------------------
