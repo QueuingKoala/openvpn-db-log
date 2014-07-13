@@ -66,6 +66,8 @@ EOM
         exit 0;
 }
 
+# Holds data of interest to be logged to the database:
+my %data;
 # Database vars:
 my %dsn;
 my %db = (
@@ -128,9 +130,8 @@ read_creds() if defined $db{creds};
 # Status file processing won't continue below
 status_proc() if defined $status{file};
 
-# Define required env-vars, keyed by shorter reference names.
+# Update %data with required env-vars, keyed by shorter reference names.
 # Disconnect/update will add to this hash later if needed
-my %data;
 env_opt(src_port	=> 'trusted_port');
 env_opt(cn		=> 'common_name');
 env_opt(vpn_ip4		=> 'ifconfig_pool_remote_ip', "");
@@ -468,7 +469,7 @@ sub status_proc {
 
 		# Otherwise process client list lines.
 		next unless /^CLIENT_LIST($delim.*){8}/;
-		%o = ();
+		%data = ();
 		@fields = split /$delim/;
 		shift @fields;
 
