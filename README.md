@@ -223,13 +223,15 @@ values are normally supplied from OpenVPN anyway.
 
 To use, declare the following env-vars for the call to openvpn-db-log.pl:
 
+  * `trusted_ip` or `trusted_ip6`
   * `trusted_port`
-  * `ifconfig_pool_remote_ip`
   * `common_name`
   * `bytes_received`
   * `bytes_sent`
+  * `time_unix`
   * `script_type` (must be set to the string: "db-update")
-  * `time_unix` (optional, the system time will be used when omitted)
+  * `ifconfig_pool_remote_ip` (optional, as OpenVPN may not have issued one)
+  * `time_update` (optional, the system time will be used when omitted)
 
 Note that any program CLI options for DB or other program features must still be
 supplied as described earlier.
