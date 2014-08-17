@@ -34,6 +34,10 @@ Database options:
   --dsn
       An advanced method to define DB DSN options in the form: opt=value
       See docs for details.
+  --env
+      Advanced DB feature to set env-vars in the form: var=value
+      See docs for details (feature used by some DBI modules.)
+
 
 Basic options:
   --fork, -f
@@ -71,6 +75,7 @@ EOM
 # Holds data of interest to be logged to the database:
 my %data;
 # Database vars:
+my %db_env;
 my %dsn;
 my %db = (
 	user	=> "",
@@ -107,6 +112,7 @@ GetOptions(
 	"host|H=s"		=> \$dsn{host},
 	"port|t=i"		=> \$dsn{port},
 	"dsn=s"			=> \%dsn,
+	"env=s"			=> \%db_env,
 	"instance-name|n=s"	=> \$instance{name},
 	"instance-proto|r=s"	=> \$instance{proto},
 	"instance-port|o=i"	=> \$instance{port},
@@ -130,6 +136,11 @@ $instance{port} >= 0 and $instance{port} <= 65535
 	or failure("Options error: instance-port out of range (1-65535)");
 
 read_creds() if defined $db{creds};
+
+# Set any DB-specific env-vars passed:
+for my $var (keys %db_env) {
+	$ENV{$var} = $db_env{$var};
+}
 
 # Status file processing won't continue below
 status_proc() if defined $status{file};

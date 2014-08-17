@@ -127,6 +127,22 @@ For example, the following two calls are identical:
     openvpn-db-log -b mysql --dsn database=vpn_db --dsn host=localhost \
       --dsn port=3306 -u db_user -p db_pass
 
+Custom database env-vars
+------------------------
+
+Another advanced feature used by some DBD drivers is environmental variables. To
+set these, the --env option is available, and used like so:
+
+    --env var=value
+
+This will set the env-var `var` to the value `value`. If the value has spaces,
+it is necessary to quote the entire stanza, as in: `--env "var=a b c"`.
+
+Notably, the PostgreSQL driver offers PGSYSCONFDIR that is not available as a
+DSN option. Also note that this env-var feature can **not** be used to provide
+user/pass credentials; you shouldn't do that anyway as this option is exposed to
+tools like `ps`.
+
 Processing status files
 -----------------------
 
