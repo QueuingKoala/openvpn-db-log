@@ -16,7 +16,7 @@ use strict;
 use Getopt::Long;
 use DBI;
 Getopt::Long::Configure ("bundling");
-my $prog_version="git-development-version";
+my $prog_version="0.9.0";
 
 sub usage {
 	printf <<EOM;
