@@ -6,6 +6,7 @@ CREATE TABLE session (
 	src_port integer NOT NULL,
 	cn varchar(64) NOT NULL,
 	vpn_ip4 inet,
+	vpn_ip6 inet,
 	disconnect_time bigint,
 	duration integer,
 	bytes_in bigint ,
