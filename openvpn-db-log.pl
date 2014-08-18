@@ -3,7 +3,12 @@
 # Log openvpn connections to a DB.
 # Handles both connect and disconnect events, keyed by exposed env-vars.
 
+# This file is part of the OpenVPN DB Log project:
+# https://github.com/QueuingKoala/openvpn-db-log
+#
 # Copyright Josh Cepek <josh.cepek@usa.net> 2014
+#   with full contributor list in the ChangeLog
+#
 # Available under the GPLv3 license:
 # http://opensource.org/licenses/GPL-3.0
 
@@ -11,9 +16,13 @@ use strict;
 use Getopt::Long;
 use DBI;
 Getopt::Long::Configure ("bundling");
+my $prog_version="git-development-version";
 
 sub usage {
 	printf <<EOM;
+OpenVPN DB Log is a GPLv3 project. See --copyright for details.
+Version: $prog_version
+
 OPTIONS:
 
 Database options:
@@ -37,7 +46,6 @@ Database options:
   --env
       Advanced DB feature to set env-vars in the form: var=value
       See docs for details (feature used by some DBI modules.)
-
 
 Basic options:
   --fork, -f
@@ -70,6 +78,21 @@ Status file processing:
       During updates, add the session/instance if there is no matching entry.
 EOM
         exit 0;
+}
+
+sub license {
+	printf <<EOM;
+OpenVPN DB Log is available under a GPLv3 license.
+Copyright Josh Cepek <josh.cepek\@usa.net> 2014
+
+Full contributor list available in the ChangeLog.
+The GPLv3 license can be found in full in the project tree at docs/GPLv3.txt.
+
+This is free software, and you are welcome to redistribute it under certain
+conditions. See the full license for details, also available from the FSF or:
+http://opensource.org/licenses/GPL-3.0
+EOM
+	exit 0
 }
 
 # Holds data of interest to be logged to the database:
@@ -123,6 +146,7 @@ GetOptions(
 	"status-info|I+"	=> \$status{verb},
 	"update-create|C"	=> \$status{create},
 	"help|usage|h"          => \&usage,
+	"copyright|license"	=> \&license,
 );
 
 # Verify CLI opts
